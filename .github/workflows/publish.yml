@@ -65,6 +65,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      max-parallel: 1
       matrix:
         cm5_variant: [lite, emmc]
     env:
