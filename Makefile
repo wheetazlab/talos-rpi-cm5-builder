@@ -34,8 +34,8 @@ ISCSI_TOOLS_IMAGE   := ghcr.io/siderolabs/iscsi-tools:$(ISCSI_TOOLS_VERSION)
 UTIL_LINUX_IMAGE    := ghcr.io/siderolabs/util-linux-tools:$(UTIL_LINUX_VERSION)
 
 # --- Output files --------------------------------------------------------------
-RAW_IMAGE         := $(OUT_DIR)/metal-$(ARCH).raw
-XZ_IMAGE          := $(RAW_IMAGE).xz
+# NOTE: The Talos imager outputs .raw.xz directly — no separate compress step needed
+XZ_IMAGE          := $(OUT_DIR)/metal-$(ARCH).raw.xz
 INSTALLER_TAR     := $(OUT_DIR)/installer-$(ARCH).tar
 
 # -------------------------------------------------------------------------------
@@ -62,7 +62,7 @@ build: $(OUT_DIR)
 	@echo "==> Build complete!"
 	@ls -lh $(OUT_DIR)/
 	@echo ""
-	@echo "Image: $(RAW_IMAGE)"
+	@echo "Image: $(XZ_IMAGE)"
 
 ## installer: Build the Talos installer OCI image (used for talosctl upgrade)
 installer: $(OUT_DIR)
@@ -80,12 +80,10 @@ installer: $(OUT_DIR)
 		--arch $(ARCH)
 	@echo "==> Installer image saved to $(INSTALLER_TAR)"
 
-## compress: Compress the raw disk image to .raw.xz (requires: make build first)
+## compress: No-op — imager already outputs .raw.xz directly
 compress:
-	@test -f "$(RAW_IMAGE)" || (echo "ERROR: $(RAW_IMAGE) not found. Run 'make build' first." && exit 1)
-	@echo "==> Compressing $(RAW_IMAGE) -> $(XZ_IMAGE)"
-	xz -T0 -v --keep $(RAW_IMAGE)
-	@echo "==> Compressed:" && ls -lh $(XZ_IMAGE)
+	@test -f "$(XZ_IMAGE)" || (echo "ERROR: $(XZ_IMAGE) not found. Run 'make build' first." && exit 1)
+	@echo "==> $(XZ_IMAGE) already compressed (imager outputs .xz directly):" && ls -lh $(XZ_IMAGE)
 
 ## push-installer: Load installer OCI tar and push to ghcr.io/$(GHCR_ORG)
 push-installer:
@@ -101,7 +99,7 @@ push-installer:
 ## release: Create a GitHub release and upload the .raw.xz image (requires gh CLI)
 release:
 	@command -v gh >/dev/null 2>&1 || (echo "ERROR: 'gh' CLI not found. Install with: brew install gh" && exit 1)
-	@test -f "$(XZ_IMAGE)" || (echo "ERROR: $(XZ_IMAGE) not found. Run 'make compress' first." && exit 1)
+	@test -f "$(XZ_IMAGE)" || (echo "ERROR: $(XZ_IMAGE) not found. Run 'make build' first." && exit 1)
 	@echo "==> Creating GitHub release $(TAG) and uploading $(XZ_IMAGE)..."
 	gh release create $(TAG) $(XZ_IMAGE) \
 		--repo $(GH_REPO) \
@@ -112,14 +110,14 @@ release:
 ## publish: Full publish pipeline — installer + compress + push + release
 publish: installer compress push-installer release
 
-## flash-sd: Flash the raw image to a disk (usage: make flash-sd DISK=/dev/rdisk4)
+## flash-sd: Flash the disk image to a disk (usage: make flash-sd DISK=/dev/rdisk4)
 flash-sd:
 	@test -n "$(DISK)" || (echo "ERROR: DISK is required. On macOS use /dev/rdiskN (raw device). Usage: make flash-sd DISK=/dev/rdisk4" && exit 1)
-	@test -f "$(RAW_IMAGE)" || (echo "ERROR: $(RAW_IMAGE) not found. Run 'make build' first." && exit 1)
-	@echo "==> Flashing $(RAW_IMAGE) to $(DISK) — THIS WILL ERASE THE DISK!"
+	@test -f "$(XZ_IMAGE)" || (echo "ERROR: $(XZ_IMAGE) not found. Run 'make build' first." && exit 1)
+	@echo "==> Flashing $(XZ_IMAGE) to $(DISK) — THIS WILL ERASE THE DISK!"
 	@echo "    Press Ctrl-C within 5 seconds to abort..."
 	@sleep 5
-	sudo dd if=$(RAW_IMAGE) of=$(DISK) bs=4m
+	xzcat $(XZ_IMAGE) | sudo dd of=$(DISK) bs=4m
 	sudo sync
 	@echo "==> Flash complete."
 

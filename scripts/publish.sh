@@ -46,8 +46,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 INSTALLER_TAR="${OUT_DIR}/installer-${ARCH}.tar"
-RAW_IMAGE="${OUT_DIR}/metal-${ARCH}.raw"
-XZ_IMAGE="${RAW_IMAGE}.xz"
+# NOTE: imager outputs .raw.xz directly — no RAW_IMAGE intermediary
+XZ_IMAGE="${OUT_DIR}/metal-${ARCH}.raw.xz"
 GHCR_IMAGE="ghcr.io/${GHCR_ORG}/${GHCR_REPO}:${TAG}"
 UPSTREAM_IMAGE="ghcr.io/siderolabs/installer:${TALOS_VERSION}"
 
@@ -57,8 +57,8 @@ if [[ ! -f "${INSTALLER_TAR}" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${RAW_IMAGE}" ]]; then
-  echo "ERROR: ${RAW_IMAGE} not found. Run 'make build' first."
+if [[ ! -f "${XZ_IMAGE}" ]]; then
+  echo "ERROR: ${XZ_IMAGE} not found. Run 'make build' first."
   exit 1
 fi
 
@@ -80,15 +80,9 @@ echo " GitHub repo         : ${GH_REPO}"
 echo "============================================================"
 echo ""
 
-# --- Step 1: Compress raw image ------------------------------------------------
-if [[ -f "${XZ_IMAGE}" ]]; then
-  echo "==> ${XZ_IMAGE} already exists, skipping compression."
-  echo "    Delete it and re-run to recompress."
-else
-  echo "==> Compressing ${RAW_IMAGE} (this may take a few minutes)..."
-  xz -T0 -v --keep "${RAW_IMAGE}"
-  echo "==> Done: $(ls -lh "${XZ_IMAGE}" | awk '{print $5}')"
-fi
+# --- Step 1: Verify compressed image (imager outputs .xz directly) ------------
+echo "==> Using pre-compressed image: ${XZ_IMAGE}"
+ls -lh "${XZ_IMAGE}"
 echo ""
 
 # --- Step 2: Load + tag + push installer OCI image ----------------------------
