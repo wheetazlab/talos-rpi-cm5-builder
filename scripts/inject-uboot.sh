@@ -3,8 +3,8 @@
 # inject-uboot.sh — Inject patched u-boot.bin into the Talos disk image file
 #
 # Operates on _out/metal-arm64.raw.xz — no physical disk needed.
-# Decompresses the image, mounts the FAT32 boot partition via hdiutil,
-# replaces u-boot.bin, then recompresses.
+# Decompresses the image, mounts the FAT32 boot partition, replaces u-boot.bin,
+# then recompresses. Works on macOS (hdiutil/diskutil) and Linux (losetup/mount).
 #
 # Must be run AFTER:
 #   make build        (_out/metal-arm64.raw.xz exists)
@@ -40,6 +40,7 @@ echo " U-Boot NVMe Inject → Image"
 echo "============================================================"
 echo " Image   : ${XZ_IMAGE}"
 echo " U-Boot  : ${UBOOT_BIN}"
+echo " OS      : $(uname -s)"
 echo "============================================================"
 echo ""
 
@@ -47,62 +48,51 @@ echo ""
 echo "==> Decompressing ${XZ_IMAGE}..."
 xz -dk "${XZ_IMAGE}"   # -k keeps the .xz, -d decompresses → .raw
 
-# --- Attach image -------------------------------------------------------------
-echo "==> Attaching image..."
-HDIUTIL_OUT=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage \
-  -nomount "${RAW_IMAGE}" 2>&1)
-echo "${HDIUTIL_OUT}"
-
-# Extract the base disk device (e.g. /dev/disk5)
-BASE_DEV=$(echo "${HDIUTIL_OUT}" | grep -oE '/dev/disk[0-9]+' | head -1)
-if [[ -z "${BASE_DEV}" ]]; then
-  echo "ERROR: Could not determine attached disk device."
-  rm -f "${RAW_IMAGE}"
-  exit 1
-fi
-BOOT_PART="${BASE_DEV}s1"
-
-# --- Mount boot partition -----------------------------------------------------
-echo "==> Mounting boot partition ${BOOT_PART}..."
-MOUNT=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage \
-  "${RAW_IMAGE}" -section 1 2>/dev/null \
-  | grep -oE '/Volumes/.*' | head -1 || true)
-
-# Fallback: mount the slice directly
-if [[ -z "${MOUNT}" ]]; then
+# --- Mount + inject (OS-specific) ---------------------------------------------
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  # macOS: hdiutil + diskutil
+  echo "==> Attaching image (macOS)..."
+  ATTACH_OUT=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage \
+    -nomount "${RAW_IMAGE}" 2>&1)
+  echo "${ATTACH_OUT}"
+  BASE_DEV=$(echo "${ATTACH_OUT}" | grep -oE '/dev/disk[0-9]+' | head -1)
+  [[ -z "${BASE_DEV}" ]] && { echo "ERROR: Could not attach image."; rm -f "${RAW_IMAGE}"; exit 1; }
+  BOOT_PART="${BASE_DEV}s1"
   diskutil mount "${BOOT_PART}"
-  MOUNT=$(diskutil info "${BOOT_PART}" | grep "Mount Point" | awk '{print $NF}')
-fi
+  MOUNT=$(diskutil info "${BOOT_PART}" | awk '/Mount Point/{print $NF}')
+  [[ -z "${MOUNT}" ]] && { echo "ERROR: Could not mount ${BOOT_PART}."; hdiutil detach "${BASE_DEV}" 2>/dev/null || true; rm -f "${RAW_IMAGE}"; exit 1; }
+  echo "==> Mounted at: ${MOUNT}"
+  _inject() { cp "${UBOOT_BIN}" "${MOUNT}/u-boot.bin"; sync; }
+  _cleanup() { diskutil unmount "${BOOT_PART}" 2>/dev/null || true; hdiutil detach "${BASE_DEV}" 2>/dev/null || true; }
 
-if [[ -z "${MOUNT}" ]]; then
-  echo "ERROR: Could not mount ${BOOT_PART}."
-  hdiutil detach "${BASE_DEV}" 2>/dev/null || true
-  rm -f "${RAW_IMAGE}"
-  exit 1
+else
+  # Linux: losetup + mount
+  echo "==> Attaching image (Linux)..."
+  LOOP_DEV=$(sudo losetup --find --show --partscan "${RAW_IMAGE}")
+  echo "==> Loop device: ${LOOP_DEV}"
+  sleep 1   # let the kernel settle partition nodes
+  BOOT_PART="${LOOP_DEV}p1"
+  MOUNT=$(mktemp -d)
+  echo "==> Mounting ${BOOT_PART} at ${MOUNT}..."
+  sudo mount "${BOOT_PART}" "${MOUNT}"
+  _inject() { sudo cp "${UBOOT_BIN}" "${MOUNT}/u-boot.bin"; sudo sync; }
+  _cleanup() { sudo umount "${MOUNT}" 2>/dev/null || true; sudo losetup -d "${LOOP_DEV}" 2>/dev/null || true; rmdir "${MOUNT}" 2>/dev/null || true; }
 fi
-
-echo "==> Mounted at: ${MOUNT}"
 
 # --- Inject -------------------------------------------------------------------
 if [[ ! -f "${MOUNT}/u-boot.bin" ]]; then
   echo "ERROR: ${MOUNT}/u-boot.bin not found — unexpected partition layout?"
-  diskutil unmount "${BOOT_PART}" 2>/dev/null || true
-  hdiutil detach "${BASE_DEV}" 2>/dev/null || true
-  rm -f "${RAW_IMAGE}"
-  exit 1
+  _cleanup; rm -f "${RAW_IMAGE}"; exit 1
 fi
 
 echo "==> Current u-boot.bin: $(ls -lh "${MOUNT}/u-boot.bin" | awk '{print $5, $6, $7, $8}')"
 echo "==> Replacing with NVMe-capable build..."
-cp "${UBOOT_BIN}" "${MOUNT}/u-boot.bin"
-sync
-
+_inject
 echo "==> New u-boot.bin:     $(ls -lh "${MOUNT}/u-boot.bin" | awk '{print $5, $6, $7, $8}')"
 
 # --- Detach -------------------------------------------------------------------
 echo "==> Unmounting and detaching image..."
-diskutil unmount "${BOOT_PART}" 2>/dev/null || true
-hdiutil detach "${BASE_DEV}"
+_cleanup
 
 # --- Recompress ---------------------------------------------------------------
 echo "==> Recompressing to ${XZ_IMAGE}..."
@@ -111,7 +101,3 @@ xz -T0 "${RAW_IMAGE}"   # -T0 = all threads; outputs .raw.xz, removes .raw
 
 echo ""
 echo "==> Done: $(ls -lh "${XZ_IMAGE}")"
-
-echo ""
-echo "==> Done! Boot partition updated with NVMe-capable U-Boot."
-echo "    Your CM5 should now be able to boot Talos from NVMe."

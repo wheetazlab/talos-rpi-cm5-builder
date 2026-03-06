@@ -11,10 +11,23 @@ UTIL_LINUX_VERSION   ?= 2.41.2
 UBOOT_VERSION        ?= v2026.04-rc1
 
 # --- Build config --------------------------------------------------------------
-ARCH     ?= arm64
-OUT_DIR  ?= _out
-OVERLAY  := rpi_5
-DOCKER   ?= podman
+ARCH        ?= arm64
+OUT_DIR     ?= _out
+OVERLAY     := rpi_5
+DOCKER      ?= podman
+# CM5_VARIANT: lite (no onboard eMMC) or emmc (has onboard eMMC)
+# lite: blacklists sdhci_brcmstb to suppress mmc0 timeout errors
+# emmc: no blacklist, eMMC controller stays active
+CM5_VARIANT ?= lite
+# Allocate a TTY only when running interactively (not in CI)
+TTY_FLAG    := $(shell [ -t 0 ] && echo "-t" || echo "")
+
+# Kernel args based on variant
+ifeq ($(CM5_VARIANT),lite)
+SDHCI_KERNEL_ARG := --extra-kernel-arg="module_blacklist=sdhci_brcmstb"
+else
+SDHCI_KERNEL_ARG :=
+endif
 
 # --- GHCR publish config -------------------------------------------------------
 GHCR_ORG        ?= wheetazlab
@@ -50,7 +63,7 @@ all: build
 ## build: Build the custom Talos disk image for RPI CM5
 build: $(OUT_DIR)
 	@echo "==> Building Talos $(TALOS_VERSION) image for RPI CM5 (sbc-raspberrypi $(SBC_RPI_VERSION))"
-	$(DOCKER) run --rm -t \
+	$(DOCKER) run --rm $(TTY_FLAG) \
 		-v $(CURDIR)/$(OUT_DIR):/out \
 		-v /dev:/dev \
 		--privileged \
@@ -60,7 +73,7 @@ build: $(OUT_DIR)
 		--overlay-name="$(OVERLAY)" \
 		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
 		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
-		--extra-kernel-arg="sdhci.polling_mode=1" \
+		$(SDHCI_KERNEL_ARG) \
 		--arch $(ARCH)
 	@echo ""
 	@echo "==> Build complete!"
@@ -71,7 +84,7 @@ build: $(OUT_DIR)
 ## installer: Build the Talos installer OCI image (used for talosctl upgrade)
 installer: $(OUT_DIR)
 	@echo "==> Building Talos installer image for RPI CM5"
-	$(DOCKER) run --rm -t \
+	$(DOCKER) run --rm $(TTY_FLAG) \
 		-v $(CURDIR)/$(OUT_DIR):/out \
 		-v /dev:/dev \
 		--privileged \
@@ -81,7 +94,7 @@ installer: $(OUT_DIR)
 		--overlay-name="$(OVERLAY)" \
 		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
 		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
-		--extra-kernel-arg="sdhci.polling_mode=1" \
+		$(SDHCI_KERNEL_ARG) \
 		--arch $(ARCH)
 	@echo "==> Installer image saved to $(INSTALLER_TAR)"
 
@@ -175,5 +188,6 @@ help:
 	@echo "  GHCR_REPO           = $(GHCR_REPO)"
 	@echo "  TAG                 = $(TAG)"
 	@echo "  UBOOT_VERSION       = $(UBOOT_VERSION)"
+	@echo "  CM5_VARIANT         = $(CM5_VARIANT)  (lite or emmc)"
 	@echo "  DISK                = (required for flash-sd, macOS: /dev/rdiskN)"
 	@echo ""

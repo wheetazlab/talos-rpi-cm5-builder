@@ -43,6 +43,7 @@ echo "============================================================"
 echo ""
 
 "${DOCKER}" run --rm \
+  -e UBOOT_VERSION="${UBOOT_VERSION}" \
   -v "${OUT_DIR}:/out" \
   -v "${PATCH}:/patch.patch:ro" \
   ubuntu:24.04 bash -c '
@@ -58,8 +59,8 @@ echo ""
       device-tree-compiler \
       git ca-certificates
 
-    echo "==> Cloning U-Boot '"${UBOOT_VERSION}"'..."
-    git clone --depth=1 --branch '"${UBOOT_VERSION}"' \
+    echo "==> Cloning U-Boot ${UBOOT_VERSION}..."
+    git clone --depth=1 --branch "${UBOOT_VERSION}" \
       https://github.com/u-boot/u-boot /uboot
 
     cd /uboot
@@ -78,10 +79,3 @@ echo ""
     echo "==> Done:"
     ls -lh /out/u-boot-nvme.bin
   '
-
-echo ""
-echo "==> u-boot-nvme.bin ready in _out/"
-echo ""
-echo "Next steps:"
-echo "  1. Flash Talos:  make flash-sd DISK=/dev/rdisk4"
-echo "  2. Inject uboot: make uboot-inject DISK=/dev/rdisk4"

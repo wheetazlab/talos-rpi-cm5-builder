@@ -17,7 +17,7 @@ set -euo pipefail
 # --- Defaults ------------------------------------------------------------------
 TALOS_VERSION="${TALOS_VERSION:-v1.12.4}"
 SBC_RPI_VERSION="${SBC_RPI_VERSION:-v0.2.0}"
-ISCSI_TOOLS_VERSION="${ISCSI_TOOLS_VERSION:-v1.12.4}"
+ISCSI_TOOLS_VERSION="${ISCSI_TOOLS_VERSION:-v0.2.0}"
 UTIL_LINUX_VERSION="${UTIL_LINUX_VERSION:-2.41.2}"
 ARCH="${ARCH:-arm64}"
 DOCKER="${DOCKER:-podman}"
@@ -99,34 +99,58 @@ echo ""
 
 # --- Step 3: Create GitHub release --------------------------------------------
 echo "==> Creating GitHub release ${TAG}..."
+
+EXTENSIONS="ghcr.io/siderolabs/iscsi-tools:${ISCSI_TOOLS_VERSION} ghcr.io/siderolabs/util-linux-tools:${UTIL_LINUX_VERSION}"
+OVERLAY_OPTIONS=""
+KERNEL_ARGS="${CM5_VARIANT:+$([ "${CM5_VARIANT:-lite}" = lite ] && echo 'module_blacklist=sdhci_brcmstb')}"
+
+EXT_LIST=$(echo "${EXTENSIONS}" | tr ' ' '\n' | grep -v '^$' | sed 's|.*/\([^:@]*\):.*|- `\1`|' | sort -u || echo '_(none)_')
+OVERLAY_NOTES=$([ -n "${OVERLAY_OPTIONS}" ] && echo "- \`${OVERLAY_OPTIONS}\`" || echo '_(none additional)_')
+KERNEL_NOTES=$([ -n "${KERNEL_ARGS}" ] && echo "\`${KERNEL_ARGS}\`" || echo '_(none — defaults only)_')
+PRERELEASE_FLAG=$(echo "${TAG}" | grep -qE '-(alpha|beta|rc)\.' && echo '--prerelease' || true)
+
+NOTES=$(cat <<EOF
+> ⚠️ Experimental build, use at your own risk.
+
+This is a patched version of Talos tailored for the Raspberry Pi CM5, including NVMe/PCIe, iscsi-tools, and util-linux-tools support.
+
+### Extensions included
+
+${EXT_LIST}
+
+### config.txt overlay options
+
+- \`dtparam=i2c_arm=on\` _(always included by default)_
+${OVERLAY_NOTES}
+
+### Extra kernel args
+
+${KERNEL_NOTES}
+
+### What's available
+
+- 📦 **Raw disk image** (\`metal-arm64.raw.xz\`) for fresh installs
+- ⚙️  **Installer image** (\`${GHCR_IMAGE}\`) for upgrades
+
+### Install
+
+- **Fresh install**
+  - Download the raw disk image from this release
+  - Flash with \`dd\` or your favorite tool
+
+- **Upgrade existing node**
+  \`\`\`bash
+  talosctl upgrade --nodes <NODE_IP> --image ${GHCR_IMAGE}
+  \`\`\`
+EOF
+)
+
+gh release delete "${TAG}" --repo "${GH_REPO}" --yes 2>/dev/null || true
 gh release create "${TAG}" "${XZ_IMAGE}" \
   --repo "${GH_REPO}" \
-  --title "Talos ${TALOS_VERSION} for Raspberry Pi CM5" \
-  --notes "## Talos Linux ${TALOS_VERSION} — Custom RPI CM5 Image
-
-Compatible with Raspberry Pi CM5 (BCM2712 C and D0/Rev 1.1 stepping).
-
-### Included components
-| Component | Version |
-|-----------|---------|
-| Talos Linux | \`${TALOS_VERSION}\` |
-| sbc-raspberrypi overlay | \`${SBC_RPI_VERSION}\` |
-| iscsi-tools | \`${ISCSI_TOOLS_VERSION}\` |
-| util-linux-tools | \`${UTIL_LINUX_VERSION}\` |
-
-### Installer image (for \`talosctl upgrade\`)
-\`\`\`
-${GHCR_IMAGE}
-\`\`\`
-
-### Flash (macOS)
-\`\`\`bash
-xzcat metal-${ARCH}.raw.xz | sudo dd of=/dev/rdiskN bs=4m
-\`\`\`
-
-### Notes
-- Boot from SD card or eMMC only — NVMe boot is not yet supported
-- Tested on DeskPi Super6C (CM4IO-compatible carrier)"
+  --title "${TAG}" \
+  ${PRERELEASE_FLAG} \
+  --notes "${NOTES}"
 
 echo ""
 echo "==> Release created: https://github.com/${GH_REPO}/releases/tag/${TAG}"
