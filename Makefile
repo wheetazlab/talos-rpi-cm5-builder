@@ -32,7 +32,10 @@ endif
 # --- GHCR publish config -------------------------------------------------------
 GHCR_ORG        ?= wheetazlab
 GHCR_REPO       ?= talos-rpi-cm5-installer
-GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(TALOS_VERSION)
+# INSTALLER_TAG lets CI override the destination image tag (e.g. v1.12.4-lite)
+# without changing TALOS_VERSION which must match the upstream installer-base tag.
+INSTALLER_TAG   ?= $(TALOS_VERSION)
+GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 
 # --- Release config ------------------------------------------------------------
 # TAG is used for `make release` — override if you want a custom tag.
