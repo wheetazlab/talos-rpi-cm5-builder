@@ -64,8 +64,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     strategy:
       matrix:
         cm5_variant: [lite, emmc]
@@ -85,15 +83,8 @@ jobs:
           name: uboot-bin
           path: _out/
 
-      - name: Set up crane
-        uses: imjasonh/setup-crane@v0.4
-
       - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
 
       - name: Install dependencies
         run: sudo apt-get install -y xz-utils
@@ -108,7 +99,7 @@ jobs:
         run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }}
 
       - name: Push installer to GHCR
-        run: crane push _out/installer-arm64.tar ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-installer:${{ env.TALOS_VERSION }}-${{ matrix.cm5_variant }}
+        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.TALOS_VERSION }}-${{ matrix.cm5_variant }}
 
       - name: Rename disk image with variant suffix
         run: mv _out/metal-arm64.raw.xz _out/metal-arm64-${{ matrix.cm5_variant }}.raw.xz
