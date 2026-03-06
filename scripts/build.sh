@@ -16,7 +16,7 @@ set -euo pipefail
 # --- Defaults ------------------------------------------------------------------
 TALOS_VERSION="${TALOS_VERSION:-v1.12.4}"
 SBC_RPI_VERSION="${SBC_RPI_VERSION:-v0.2.0}"
-ISCSI_TOOLS_VERSION="${ISCSI_TOOLS_VERSION:-v1.12.4}"
+ISCSI_TOOLS_VERSION="${ISCSI_TOOLS_VERSION:-v0.2.0}"
 UTIL_LINUX_VERSION="${UTIL_LINUX_VERSION:-2.41.2}"
 ARCH="${ARCH:-arm64}"
 DOCKER="${DOCKER:-podman}"
