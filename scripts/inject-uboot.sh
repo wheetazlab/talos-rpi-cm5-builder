@@ -46,7 +46,7 @@ echo ""
 
 # --- Decompress ---------------------------------------------------------------
 echo "==> Decompressing ${XZ_IMAGE}..."
-xz -dk "${XZ_IMAGE}"   # -k keeps the .xz, -d decompresses → .raw
+xz -d --stdout "${XZ_IMAGE}" > "${RAW_IMAGE}"   # stdout avoids xz trying to restore file group/owner metadata
 
 # --- Mount + inject (OS-specific) ---------------------------------------------
 if [[ "$(uname -s)" == "Darwin" ]]; then
