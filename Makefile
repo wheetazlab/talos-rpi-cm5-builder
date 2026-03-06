@@ -8,6 +8,7 @@ TALOS_VERSION        ?= v1.12.4
 SBC_RPI_VERSION      ?= v0.2.0
 ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.2
+UBOOT_VERSION        ?= v2026.04-rc1
 
 # --- Build config --------------------------------------------------------------
 ARCH     ?= arm64
@@ -37,10 +38,12 @@ UTIL_LINUX_IMAGE    := ghcr.io/siderolabs/util-linux-tools:$(UTIL_LINUX_VERSION)
 # NOTE: The Talos imager outputs .raw.xz directly — no separate compress step needed
 XZ_IMAGE          := $(OUT_DIR)/metal-$(ARCH).raw.xz
 INSTALLER_TAR     := $(OUT_DIR)/installer-$(ARCH).tar
+UBOOT_BIN         := $(OUT_DIR)/u-boot-nvme.bin
+UBOOT_PATCH       := $(CURDIR)/patches/uboot-rpi5-nvme.patch
 
 # -------------------------------------------------------------------------------
 
-.PHONY: all build compress flash-sd installer push-installer release publish pull-images clean help
+.PHONY: all build compress flash-sd installer push-installer release publish pull-images uboot-build uboot-inject uboot clean help
 
 all: build
 
@@ -121,6 +124,20 @@ flash-sd:
 	sudo sync
 	@echo "==> Flash complete."
 
+## uboot-build: Build patched U-Boot with NVMe/PCIe support for RPi5/CM5 (native arm64 — no cross-compiler)
+uboot-build: $(OUT_DIR)
+	DOCKER=$(DOCKER) UBOOT_VERSION=$(UBOOT_VERSION) ./scripts/build-uboot.sh
+	@echo "==> U-Boot binary ready: $(UBOOT_BIN)"
+
+## uboot-inject: Swap patched U-Boot into flashed SD/eMMC boot partition (usage: make uboot-inject DISK=/dev/rdisk4)
+uboot-inject:
+	@test -n "$(DISK)" || (echo "ERROR: DISK required. Usage: make uboot-inject DISK=/dev/rdisk4" && exit 1)
+	@test -f "$(UBOOT_BIN)" || (echo "ERROR: $(UBOOT_BIN) not found. Run 'make uboot-build' first." && exit 1)
+	@./scripts/inject-uboot.sh $(DISK)
+
+## uboot: Build patched U-Boot AND inject into disk in one step (usage: make uboot DISK=/dev/rdisk4)
+uboot: uboot-build uboot-inject
+
 ## pull-images: Pre-pull all images needed for the build
 pull-images:
 	$(DOCKER) pull $(IMAGER_IMAGE)
@@ -153,5 +170,6 @@ help:
 	@echo "  GHCR_ORG            = $(GHCR_ORG)"
 	@echo "  GHCR_REPO           = $(GHCR_REPO)"
 	@echo "  TAG                 = $(TAG)"
-	@echo "  DISK                = (required for flash-sd, macOS: /dev/rdiskN)"
+	@echo "  UBOOT_VERSION       = $(UBOOT_VERSION)"
+	@echo "  DISK                = (required for flash-sd/uboot-inject, macOS: /dev/rdiskN)"
 	@echo ""
