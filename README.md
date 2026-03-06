@@ -2,7 +2,7 @@
 
 [![Build and Publish](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/publish.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/publish.yml)
 
-Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM5** on the **DeskPi Super6C** cluster board.
+Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM5** on CM4IO-compatible carrier boards (e.g. DeskPi Super6C).
 
 Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards).
 
@@ -131,7 +131,7 @@ make flash-sd DISK=/dev/rdisk4
 
 ### eMMC via rpiboot
 
-1. Set the CM5 into USB boot mode (check the Super6C manual for the jumper/button)
+1. Set the CM5 into USB boot mode (check your carrier board manual for the jumper/button)
 2. Connect via USB-C and run `sudo rpiboot`
 3. Flash to the exposed eMMC disk
 
@@ -258,4 +258,4 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-inst
 - [CM5 boot issue fix (sbc-raspberrypi#79)](https://github.com/siderolabs/sbc-raspberrypi/pull/79)
 - [Original boot issue (talos#12748)](https://github.com/siderolabs/talos/issues/12748)
 - [Talos system extensions](https://www.talos.dev/v1.12/talos-guides/configuration/system-extensions/)
-- [DeskPi Super6C](https://deskpi.com/products/deskpi-super6c-raspberry-pi-cm4-6-boards-cluster-mini-itx-board)
+- [DeskPi Super6C](https://deskpi.com/products/deskpi-super6c-raspberry-pi-cm4-6-boards-cluster-mini-itx-board) — example CM4IO-compatible carrier board
