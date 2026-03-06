@@ -121,6 +121,7 @@ jobs:
       EXTENSIONS: ${{ needs.resolve-version.outputs.extensions }}
       REGISTRY: ghcr.io
       REGISTRY_USERNAME: ${{ github.repository_owner }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Download disk image artifacts
         uses: actions/download-artifact@v4

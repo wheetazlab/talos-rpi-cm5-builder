@@ -206,7 +206,7 @@ make help           Show all targets and version variables
 - Talos Linux kernel + initramfs (arm64)
 - **Patched U-Boot** (`v2026.04-rc1`) with BCM2712 PCIe driver — enables NVMe boot on CM5
 - DTBs from `sbc-raspberrypi v0.2.0`:
-  - `bcm2712-rpi-cm5-cm4io.dtb` ← used by DeskPi Super6C
+  - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)
   - `bcm2712-rpi-cm5-cm5io.dtb`
   - `bcm2712-rpi-cm5l-cm4io.dtb`
   - `bcm2712-rpi-cm5l-cm5io.dtb`
