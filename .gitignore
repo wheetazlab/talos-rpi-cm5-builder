@@ -1,0 +1,14 @@
+# Build output
+_out/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor
+.vscode/
+*.swp
+*.swo
+*~
