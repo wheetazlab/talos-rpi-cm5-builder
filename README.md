@@ -16,6 +16,36 @@ Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/is
 
 ---
 
+## ⚠️ EEPROM Requirement
+
+**Before flashing, ensure your CM5 is running the latest bootloader EEPROM.** An outdated EEPROM can cause boot failures, NVMe detection issues, or hangs at the U-Boot logo that look like image problems but aren't.
+
+### Check your current EEPROM version
+
+Boot into Raspberry Pi OS and run:
+
+```bash
+sudo rpi-eeprom-update
+```
+
+### Update to latest
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo rpi-eeprom-update -a
+sudo reboot
+```
+
+After reboot, verify with `sudo rpi-eeprom-update` — it should report no update needed.
+
+### If the CM5 has never booted an OS
+
+Flash Raspberry Pi OS to an SD card, boot from it once (this automatically updates the EEPROM), then proceed to flash Talos.
+
+> **Why this matters:** NVMe boot and PCIe support depend on EEPROM firmware features added in late 2024. Boards shipped with older firmware may fail to enumerate NVMe devices in U-Boot regardless of the kernel/DTB configuration.
+
+---
+
 ## Versions
 
 | Component             | Version        |
@@ -91,7 +121,6 @@ make flash-sd DISK=/dev/rdisk4
 2. Connect via USB-C and run `sudo rpiboot`
 3. Flash to the exposed eMMC disk
 
-> **Tip:** Flash Raspberry Pi OS first if CM5 hangs at the U-Boot logo — this updates the bootloader EEPROM.
 
 ---
 
