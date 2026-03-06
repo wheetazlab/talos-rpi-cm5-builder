@@ -78,6 +78,20 @@ Images are built automatically on GitHub Actions using a native **Ubuntu arm64**
    - Uploads `metal-arm64-lite.raw.xz` / `metal-arm64-emmc.raw.xz` as artifacts
 4. **`release`** — downloads both artifacts and creates the GitHub release with both images attached
 
+> **⚠️ Required GitHub permissions (org repos only)**
+>
+> If this repo is under a **GitHub Organization**, the default `GITHUB_TOKEN` cannot push to GHCR unless the org explicitly allows it. Without this, every push step will fail with `permission_denied: write_package`.
+>
+> Fix via API or UI:
+> - **UI:** Organization → Settings → Actions → General → Workflow permissions → **Read and write permissions**
+> - **CLI:**
+> ```bash
+> gh api --method PUT /orgs/<YOUR_ORG>/actions/permissions/workflow \
+>   --field default_workflow_permissions=write \
+>   --field can_approve_pull_request_reviews=true
+> ```
+> This only needs to be set once per organization.
+
 ---
 
 ## Prerequisites (local builds only)
