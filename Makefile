@@ -91,7 +91,7 @@ push-installer:
 	@echo "==> Loading $(INSTALLER_TAR) into $(DOCKER)..."
 	$(DOCKER) load -i $(INSTALLER_TAR)
 	@echo "==> Tagging as $(GHCR_IMAGE)"
-	$(DOCKER) tag ghcr.io/siderolabs/installer:$(TALOS_VERSION) $(GHCR_IMAGE)
+	$(DOCKER) tag ghcr.io/siderolabs/installer-base:$(TALOS_VERSION) $(GHCR_IMAGE)
 	@echo "==> Pushing $(GHCR_IMAGE)"
 	$(DOCKER) push $(GHCR_IMAGE)
 	@echo "==> Push complete!"

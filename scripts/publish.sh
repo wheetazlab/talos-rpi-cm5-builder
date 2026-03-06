@@ -49,7 +49,7 @@ INSTALLER_TAR="${OUT_DIR}/installer-${ARCH}.tar"
 # NOTE: imager outputs .raw.xz directly — no RAW_IMAGE intermediary
 XZ_IMAGE="${OUT_DIR}/metal-${ARCH}.raw.xz"
 GHCR_IMAGE="ghcr.io/${GHCR_ORG}/${GHCR_REPO}:${TAG}"
-UPSTREAM_IMAGE="ghcr.io/siderolabs/installer:${TALOS_VERSION}"
+UPSTREAM_IMAGE="ghcr.io/siderolabs/installer-base:${TALOS_VERSION}"
 
 # --- Pre-flight checks ---------------------------------------------------------
 if [[ ! -f "${INSTALLER_TAR}" ]]; then
