@@ -1,71 +1,94 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------------------
-# inject-uboot.sh — Replace u-boot.bin on a flashed SD/eMMC with the patched
-#                   NVMe-capable build from _out/u-boot-nvme.bin
+# inject-uboot.sh — Inject patched u-boot.bin into the Talos disk image file
 #
-# Must be run AFTER flashing the Talos image (make flash-sd).
-# macOS will auto-mount the FAT32 boot partition after flashing.
+# Operates on _out/metal-arm64.raw.xz — no physical disk needed.
+# Decompresses the image, mounts the FAT32 boot partition via hdiutil,
+# replaces u-boot.bin, then recompresses.
+#
+# Must be run AFTER:
+#   make build        (_out/metal-arm64.raw.xz exists)
+#   make uboot-build  (_out/u-boot-nvme.bin exists)
 #
 # Usage:
-#   ./scripts/inject-uboot.sh /dev/rdisk4
-#   make uboot-inject DISK=/dev/rdisk4
+#   ./scripts/inject-uboot.sh
+#   make uboot-inject
 # ------------------------------------------------------------------------------
 
 set -euo pipefail
 
-DISK="${1:-}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${REPO_DIR}/_out"
+ARCH="${ARCH:-arm64}"
+XZ_IMAGE="${OUT_DIR}/metal-${ARCH}.raw.xz"
+RAW_IMAGE="${OUT_DIR}/metal-${ARCH}.raw"
 UBOOT_BIN="${OUT_DIR}/u-boot-nvme.bin"
 
 # --- Pre-flight ---------------------------------------------------------------
-if [[ -z "${DISK}" ]]; then
-  echo "ERROR: Disk argument required."
-  echo "Usage: $0 /dev/rdisk4"
+if [[ ! -f "${XZ_IMAGE}" ]]; then
+  echo "ERROR: ${XZ_IMAGE} not found. Run 'make build' first."
   exit 1
 fi
 
 if [[ ! -f "${UBOOT_BIN}" ]]; then
-  echo "ERROR: ${UBOOT_BIN} not found."
-  echo "Run 'make uboot-build' first."
+  echo "ERROR: ${UBOOT_BIN} not found. Run 'make uboot-build' first."
   exit 1
 fi
 
-# Derive partition device: /dev/rdisk4 -> /dev/disk4s1
-BASE_DISK="${DISK/rdisk/disk}"
-BOOT_PART="${BASE_DISK}s1"
-
 echo "============================================================"
-echo " U-Boot NVMe Inject"
+echo " U-Boot NVMe Inject → Image"
 echo "============================================================"
-echo " Source  : ${UBOOT_BIN}"
-echo " Disk    : ${DISK}"
-echo " Boot partition: ${BOOT_PART}"
+echo " Image   : ${XZ_IMAGE}"
+echo " U-Boot  : ${UBOOT_BIN}"
 echo "============================================================"
 echo ""
 
-# Unmount if already mounted
-echo "==> Unmounting ${BOOT_PART} (if mounted)..."
-diskutil unmount "${BOOT_PART}" 2>/dev/null || true
+# --- Decompress ---------------------------------------------------------------
+echo "==> Decompressing ${XZ_IMAGE}..."
+xz -dk "${XZ_IMAGE}"   # -k keeps the .xz, -d decompresses → .raw
 
-# Mount the boot partition
-echo "==> Mounting ${BOOT_PART}..."
-diskutil mount "${BOOT_PART}"
+# --- Attach image -------------------------------------------------------------
+echo "==> Attaching image..."
+HDIUTIL_OUT=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage \
+  -nomount "${RAW_IMAGE}" 2>&1)
+echo "${HDIUTIL_OUT}"
 
-# Get mount point
-MOUNT=$(diskutil info "${BOOT_PART}" | grep "Mount Point" | awk '{print $NF}')
+# Extract the base disk device (e.g. /dev/disk5)
+BASE_DEV=$(echo "${HDIUTIL_OUT}" | grep -oE '/dev/disk[0-9]+' | head -1)
+if [[ -z "${BASE_DEV}" ]]; then
+  echo "ERROR: Could not determine attached disk device."
+  rm -f "${RAW_IMAGE}"
+  exit 1
+fi
+BOOT_PART="${BASE_DEV}s1"
+
+# --- Mount boot partition -----------------------------------------------------
+echo "==> Mounting boot partition ${BOOT_PART}..."
+MOUNT=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage \
+  "${RAW_IMAGE}" -section 1 2>/dev/null \
+  | grep -oE '/Volumes/.*' | head -1 || true)
+
+# Fallback: mount the slice directly
+if [[ -z "${MOUNT}" ]]; then
+  diskutil mount "${BOOT_PART}"
+  MOUNT=$(diskutil info "${BOOT_PART}" | grep "Mount Point" | awk '{print $NF}')
+fi
 
 if [[ -z "${MOUNT}" ]]; then
-  echo "ERROR: Could not determine mount point for ${BOOT_PART}"
+  echo "ERROR: Could not mount ${BOOT_PART}."
+  hdiutil detach "${BASE_DEV}" 2>/dev/null || true
+  rm -f "${RAW_IMAGE}"
   exit 1
 fi
 
 echo "==> Mounted at: ${MOUNT}"
 
-# Verify it looks like a Talos boot partition
+# --- Inject -------------------------------------------------------------------
 if [[ ! -f "${MOUNT}/u-boot.bin" ]]; then
-  echo "ERROR: ${MOUNT}/u-boot.bin not found — is this the right disk/partition?"
+  echo "ERROR: ${MOUNT}/u-boot.bin not found — unexpected partition layout?"
   diskutil unmount "${BOOT_PART}" 2>/dev/null || true
+  hdiutil detach "${BASE_DEV}" 2>/dev/null || true
+  rm -f "${RAW_IMAGE}"
   exit 1
 fi
 
@@ -76,8 +99,18 @@ sync
 
 echo "==> New u-boot.bin:     $(ls -lh "${MOUNT}/u-boot.bin" | awk '{print $5, $6, $7, $8}')"
 
-echo "==> Unmounting ${BOOT_PART}..."
-diskutil unmount "${BOOT_PART}"
+# --- Detach -------------------------------------------------------------------
+echo "==> Unmounting and detaching image..."
+diskutil unmount "${BOOT_PART}" 2>/dev/null || true
+hdiutil detach "${BASE_DEV}"
+
+# --- Recompress ---------------------------------------------------------------
+echo "==> Recompressing to ${XZ_IMAGE}..."
+rm -f "${XZ_IMAGE}"
+xz -T0 "${RAW_IMAGE}"   # -T0 = all threads; outputs .raw.xz, removes .raw
+
+echo ""
+echo "==> Done: $(ls -lh "${XZ_IMAGE}")"
 
 echo ""
 echo "==> Done! Boot partition updated with NVMe-capable U-Boot."

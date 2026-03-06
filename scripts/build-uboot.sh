@@ -54,7 +54,7 @@ echo ""
     apt-get install -qq -y \
       gcc make bison flex \
       python3 python3-setuptools python3-pyelftools \
-      swig libssl-dev bc \
+      swig libssl-dev libgnutls28-dev bc \
       device-tree-compiler \
       git ca-certificates
 

@@ -60,6 +60,7 @@ build: $(OUT_DIR)
 		--overlay-name="$(OVERLAY)" \
 		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
 		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
+		--extra-kernel-arg="sdhci.polling_mode=1" \
 		--arch $(ARCH)
 	@echo ""
 	@echo "==> Build complete!"
@@ -80,6 +81,7 @@ installer: $(OUT_DIR)
 		--overlay-name="$(OVERLAY)" \
 		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
 		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
+		--extra-kernel-arg="sdhci.polling_mode=1" \
 		--arch $(ARCH)
 	@echo "==> Installer image saved to $(INSTALLER_TAR)"
 
@@ -103,6 +105,8 @@ push-installer:
 release:
 	@command -v gh >/dev/null 2>&1 || (echo "ERROR: 'gh' CLI not found. Install with: brew install gh" && exit 1)
 	@test -f "$(XZ_IMAGE)" || (echo "ERROR: $(XZ_IMAGE) not found. Run 'make build' first." && exit 1)
+	@echo "==> Deleting existing release $(TAG) if present..."
+	@gh release delete $(TAG) --repo $(GH_REPO) --yes 2>/dev/null || true
 	@echo "==> Creating GitHub release $(TAG) and uploading $(XZ_IMAGE)..."
 	gh release create $(TAG) $(XZ_IMAGE) \
 		--repo $(GH_REPO) \
@@ -110,8 +114,8 @@ release:
 		--notes "Custom Talos Linux image for Raspberry Pi CM5 (D0/Rev1.1 compatible).\n\nIncludes:\n- sbc-raspberrypi overlay: $(SBC_RPI_VERSION)\n- iscsi-tools: $(ISCSI_TOOLS_VERSION)\n- util-linux-tools: $(UTIL_LINUX_VERSION)\n\nInstaller image: $(GHCR_IMAGE)\n\nFlash with:\n\`\`\`\nxzcat metal-$(ARCH).raw.xz | sudo dd of=/dev/rdiskN bs=4m\n\`\`\`"
 	@echo "==> Release created!"
 
-## publish: Full publish pipeline — installer + compress + push + release
-publish: installer compress push-installer release
+## publish: Full pipeline — build image, inject U-Boot, build installer, push to GHCR, create release
+publish: build uboot-build uboot-inject installer push-installer release
 
 ## flash-sd: Flash the disk image to a disk (usage: make flash-sd DISK=/dev/rdisk4)
 flash-sd:
@@ -129,13 +133,13 @@ uboot-build: $(OUT_DIR)
 	DOCKER=$(DOCKER) UBOOT_VERSION=$(UBOOT_VERSION) ./scripts/build-uboot.sh
 	@echo "==> U-Boot binary ready: $(UBOOT_BIN)"
 
-## uboot-inject: Swap patched U-Boot into flashed SD/eMMC boot partition (usage: make uboot-inject DISK=/dev/rdisk4)
+## uboot-inject: Inject patched U-Boot into the disk image file (_out/metal-arm64.raw.xz)
 uboot-inject:
-	@test -n "$(DISK)" || (echo "ERROR: DISK required. Usage: make uboot-inject DISK=/dev/rdisk4" && exit 1)
 	@test -f "$(UBOOT_BIN)" || (echo "ERROR: $(UBOOT_BIN) not found. Run 'make uboot-build' first." && exit 1)
-	@./scripts/inject-uboot.sh $(DISK)
+	@test -f "$(XZ_IMAGE)" || (echo "ERROR: $(XZ_IMAGE) not found. Run 'make build' first." && exit 1)
+	@./scripts/inject-uboot.sh
 
-## uboot: Build patched U-Boot AND inject into disk in one step (usage: make uboot DISK=/dev/rdisk4)
+## uboot: Build patched U-Boot AND inject into disk image in one step
 uboot: uboot-build uboot-inject
 
 ## pull-images: Pre-pull all images needed for the build
@@ -171,5 +175,5 @@ help:
 	@echo "  GHCR_REPO           = $(GHCR_REPO)"
 	@echo "  TAG                 = $(TAG)"
 	@echo "  UBOOT_VERSION       = $(UBOOT_VERSION)"
-	@echo "  DISK                = (required for flash-sd/uboot-inject, macOS: /dev/rdiskN)"
+	@echo "  DISK                = (required for flash-sd, macOS: /dev/rdiskN)"
 	@echo ""
