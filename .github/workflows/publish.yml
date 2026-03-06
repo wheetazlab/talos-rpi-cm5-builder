@@ -14,7 +14,7 @@ on:
 jobs:
   # ── Resolve the Talos version once and share it across all jobs ─────────────
   resolve-version:
-    runs-on: ubuntu-24.04-arm64
+    runs-on: ubuntu-24.04-arm
     outputs:
       talos_version: ${{ steps.version.outputs.version }}
       extensions: ${{ steps.version.outputs.extensions }}
@@ -40,7 +40,7 @@ jobs:
 
   # ── Build patched U-Boot once (variant-agnostic) ────────────────────────────
   build-uboot:
-    runs-on: ubuntu-24.04-arm64
+    runs-on: ubuntu-24.04-arm
     needs: resolve-version
     env:
       DOCKER: docker
@@ -59,7 +59,7 @@ jobs:
 
   # ── Build image + installer for each variant in parallel ────────────────────
   build:
-    runs-on: ubuntu-24.04-arm64
+    runs-on: ubuntu-24.04-arm
     needs: [resolve-version, build-uboot]
     permissions:
       contents: read
@@ -112,7 +112,7 @@ jobs:
 
   # ── Create GitHub release with both variant artifacts ───────────────────────
   release:
-    runs-on: ubuntu-24.04-arm64
+    runs-on: ubuntu-24.04-arm
     needs: [resolve-version, build]
     permissions:
       contents: write
