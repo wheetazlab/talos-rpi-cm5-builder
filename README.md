@@ -83,9 +83,26 @@ All versions are configurable — see [Customization](#customization).
 
 Images are built automatically on GitHub Actions using a native **Ubuntu arm64** runner — no cross-compilation needed.
 
-### Workflow 1: Build and Publish (`publish.yml`)
+Both workflow files use `github.repository_owner` for all GHCR paths — they are fully portable. Forks automatically publish to the forker's own GHCR namespace.
 
-The standard image build pipeline.
+### Step 1 (prerequisite for patched kernel): Build Patched Imager (`build-patched-imager.yml`)
+
+**Run this first** — it rebuilds the kernel with the macb RP1 PCIe fix and produces a patched imager image. Only needs to run once per kernel version (i.e. once per Talos minor release). Skip this step if you only want a standard unpatched image.
+
+**Trigger:** Manual only — **Actions → Build Patched Imager (macb RP1 PCIe fix) → Run workflow**
+
+**What it does (no fork needed):**
+1. Clones `siderolabs/pkgs` at the matching release branch (ephemeral, thrown away after the run)
+2. Copies `patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch` into the pkgs kernel patch directory
+3. Runs `docker buildx build --target=kernel` via `siderolabs/bldr` — downloads Linux source, applies all upstream patches plus ours, compiles `vmlinuz` (~40–90 min on a 4-core arm64 runner)
+4. Pushes the patched kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-macb-fix`
+5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager and replaces only `usr/install/arm64/vmlinuz` with the patched one
+6. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix`
+7. Writes a job summary with the exact `custom_imager` tag to copy into the next step
+
+### Step 2: Build and Publish (`publish.yml`)
+
+The standard image build pipeline. Builds disk images and the upgrade installer for both CM5 variants.
 
 **Triggers:**
 - Push a version tag (e.g. `git tag v1.12.4 && git push --tags`) → full build + publish
@@ -101,28 +118,14 @@ The standard image build pipeline.
    - Uploads `metal-arm64-lite.raw.xz` / `metal-arm64-emmc.raw.xz` as artifacts
 4. **`release`** — downloads both artifacts and creates the GitHub release with both images attached
 
-To use the patched kernel, trigger this workflow with the `custom_imager` input set to the tag output by the patched imager workflow below.
+To include the patched kernel, run the workflow manually and set the `custom_imager` input to the tag from step 1's job summary. Without it, the standard unpatched Talos imager is used.
 
-### Workflow 2: Build Patched Imager (`build-patched-imager.yml`)
-
-Builds the macb-patched kernel and assembles a drop-in replacement imager. Run this first when the kernel version changes or to refresh the fix.
-
-**Trigger:** Manual only — **Actions → Build Patched Imager (macb RP1 PCIe fix) → Run workflow**
-
-**What it does (no fork needed):**
-1. Clones `siderolabs/pkgs` at the matching release branch (ephemeral, thrown away after the run)
-2. Copies `patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch` into the pkgs kernel patch directory
-3. Runs `docker buildx build --target=kernel` via `siderolabs/bldr` — downloads Linux source, applies all upstream patches plus ours, compiles `vmlinuz` (~40–90 min on a 4-core arm64 runner)
-4. Pushes the patched kernel OCI to GHCR: `ghcr.io/wheetazlab/talos-rpi-cm5-builder/kernel:<ver>-macb-fix`
-5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager and replaces only `usr/install/arm64/vmlinuz` with the patched one
-6. Pushes the patched imager to GHCR: `ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:<ver>-macb-fix`
-7. Writes a job summary with the exact `custom_imager` tag to pass to the publish workflow
-
-**Two-workflow sequence to publish a patched release:**
+**Full sequence to publish a patched release:**
 ```
-Actions → Build Patched Imager → Run workflow
-  ↓ (wait ~90 min, copy custom_imager tag from job summary)
-Actions → Build and Publish → Run workflow  [custom_imager: ghcr.io/.../imager:1.12.4-macb-fix]
+Step 1: Actions → Build Patched Imager → Run workflow
+        ↓ wait ~90 min → copy custom_imager tag from job summary
+Step 2: Actions → Build and Publish → Run workflow
+        custom_imager: ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix
 ```
 
 > **⚠️ Required GitHub permissions (org repos only)**
