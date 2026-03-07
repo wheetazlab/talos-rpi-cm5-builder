@@ -44,9 +44,9 @@ on:
         required: false
         default: 'v1.12.4'
       pkgs_ref:
-        description: 'siderolabs/pkgs branch or tag to build from'
+        description: 'siderolabs/pkgs commit/branch to build from — must match the exact pkgs commit used for the target Talos release (v1.12.4 → b1fc4c6)'
         required: false
-        default: 'release-1.12'
+        default: 'b1fc4c6'
 
 jobs:
   build:
@@ -59,7 +59,7 @@ jobs:
 
     env:
       TALOS_VERSION: ${{ github.event.inputs.talos_version || 'v1.12.4' }}
-      PKGS_REF:      ${{ github.event.inputs.pkgs_ref || 'release-1.12' }}
+      PKGS_REF:      ${{ github.event.inputs.pkgs_ref || 'b1fc4c6' }}
       IMAGE_PREFIX:  ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder
 
     steps:
@@ -93,8 +93,10 @@ jobs:
       # ── Clone & patch pkgs ──────────────────────────────────────────────────
       - name: Clone siderolabs/pkgs @ ${{ env.PKGS_REF }}
         run: |
-          git clone --depth=1 --branch "${{ env.PKGS_REF }}" \
-            https://github.com/siderolabs/pkgs.git /tmp/pkgs
+          git init /tmp/pkgs
+          git -C /tmp/pkgs remote add origin https://github.com/siderolabs/pkgs.git
+          git -C /tmp/pkgs fetch --depth=1 origin "${{ env.PKGS_REF }}"
+          git -C /tmp/pkgs checkout FETCH_HEAD
           echo "pkgs HEAD: $(git -C /tmp/pkgs log --oneline -1)"
 
       - name: Apply macb patch to pkgs
