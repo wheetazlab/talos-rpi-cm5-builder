@@ -43,9 +43,29 @@ GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 TAG             ?= $(TALOS_VERSION)
 GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 
+# --- Kernel patch overrides (macb RP1 PCIe TSTART fix) -----------------------
+# The macb driver in Talos ≥ 1.12 (kernel 6.18.x) silently drops PCIe posted
+# writes to the TSTART register on RP1, causing the TX ring to stall after a
+# while. The fix is a read-after-write flush baked into vmlinuz (CONFIG_MACB=y).
+#
+# No forks needed. Run the build-patched-imager workflow once:
+#   GitHub Actions → Build Patched Imager (macb RP1 PCIe fix)
+# It clones siderolabs/pkgs, applies patches/net-macb-flush-TSTART-write-to-
+# RP1-over-PCIe.patch, builds a patched vmlinuz, and assembles a custom imager
+# image that replaces ONLY usr/install/arm64/vmlinuz in the official imager.
+# The workflow summary shows the exact tag to paste below.
+#
+# Example:
+#   make build CUSTOM_IMAGER=ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:1.12.4-macb-fix
+#
+# CUSTOM_INSTALLER_BASE: only useful if you need a custom Go installer binary.
+# It does NOT affect which kernel is used — vmlinuz lives in the imager image.
+CUSTOM_IMAGER           ?=
+CUSTOM_INSTALLER_BASE   ?=
+
 # --- Image refs ----------------------------------------------------------------
-IMAGER_IMAGE        := ghcr.io/siderolabs/imager:$(TALOS_VERSION)
-INSTALLER_BASE      := ghcr.io/siderolabs/installer-base:$(TALOS_VERSION)
+IMAGER_IMAGE        := $(if $(CUSTOM_IMAGER),$(CUSTOM_IMAGER),ghcr.io/siderolabs/imager:$(TALOS_VERSION))
+INSTALLER_BASE      := $(if $(CUSTOM_INSTALLER_BASE),$(CUSTOM_INSTALLER_BASE),ghcr.io/siderolabs/installer-base:$(TALOS_VERSION))
 OVERLAY_IMAGE       := ghcr.io/siderolabs/sbc-raspberrypi:$(SBC_RPI_VERSION)
 ISCSI_TOOLS_IMAGE   := ghcr.io/siderolabs/iscsi-tools:$(ISCSI_TOOLS_VERSION)
 UTIL_LINUX_IMAGE    := ghcr.io/siderolabs/util-linux-tools:$(UTIL_LINUX_VERSION)
