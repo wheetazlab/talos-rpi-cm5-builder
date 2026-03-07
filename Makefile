@@ -43,24 +43,23 @@ GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 TAG             ?= $(TALOS_VERSION)
 GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 
-# --- Kernel patch fork overrides -----------------------------------------------
-# When using a custom siderolabs/talos fork that includes the macb RP1 PCIe
-# TSTART fix (patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch),
-# override these two variables to point at your forked images.
+# --- Kernel patch overrides (macb RP1 PCIe TSTART fix) -----------------------
+# The macb driver in Talos ≥ 1.12 (kernel 6.18.x) silently drops PCIe posted
+# writes to the TSTART register on RP1, causing the TX ring to stall after a
+# while. The fix is a read-after-write flush baked into vmlinuz (CONFIG_MACB=y).
 #
-# Steps to build the fix:
-#   1. Fork https://github.com/siderolabs/pkgs under your GitHub org
-#      → copy patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch
-#        into kernel/build/patches/ in that fork and push
-#      → GitHub Actions builds a custom kernel; note the resulting pkgs tag
-#   2. Fork https://github.com/siderolabs/talos under your GitHub org
-#      → update the siderolabs/pkgs version pin to your fork's tag
-#      → push; GitHub Actions builds installer-base + imager
-#   3. Set CUSTOM_IMAGER and CUSTOM_INSTALLER_BASE below (or via env/CLI)
+# No forks needed. Run the build-patched-imager workflow once:
+#   GitHub Actions → Build Patched Imager (macb RP1 PCIe fix)
+# It clones siderolabs/pkgs, applies patches/net-macb-flush-TSTART-write-to-
+# RP1-over-PCIe.patch, builds a patched vmlinuz, and assembles a custom imager
+# image that replaces ONLY usr/install/arm64/vmlinuz in the official imager.
+# The workflow summary shows the exact tag to paste below.
 #
 # Example:
-#   make build CUSTOM_IMAGER=ghcr.io/wheetazlab/talos-imager:v1.12.4-macb-fix \
-#              CUSTOM_INSTALLER_BASE=ghcr.io/wheetazlab/talos-installer-base:v1.12.4-macb-fix
+#   make build CUSTOM_IMAGER=ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:1.12.4-macb-fix
+#
+# CUSTOM_INSTALLER_BASE: only useful if you need a custom Go installer binary.
+# It does NOT affect which kernel is used — vmlinuz lives in the imager image.
 CUSTOM_IMAGER           ?=
 CUSTOM_INSTALLER_BASE   ?=
 

@@ -11,11 +11,11 @@ on:
         required: false
         default: ''
       custom_imager:
-        description: 'Custom imager image (e.g. ghcr.io/wheetazlab/talos-imager:v1.12.4-macb-fix) — leave blank to use upstream'
+        description: 'Patched imager from build-patched-imager workflow (contains fixed vmlinuz). Leave blank to use upstream siderolabs/imager.'
         required: false
         default: ''
       custom_installer_base:
-        description: 'Custom installer-base image (e.g. ghcr.io/wheetazlab/talos-installer-base:v1.12.4-macb-fix) — leave blank to use upstream'
+        description: 'Custom installer-base (Go installer binary override only — does NOT affect the kernel). Leave blank for upstream.'
         required: false
         default: ''
 
