@@ -43,9 +43,30 @@ GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 TAG             ?= $(TALOS_VERSION)
 GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 
+# --- Kernel patch fork overrides -----------------------------------------------
+# When using a custom siderolabs/talos fork that includes the macb RP1 PCIe
+# TSTART fix (patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch),
+# override these two variables to point at your forked images.
+#
+# Steps to build the fix:
+#   1. Fork https://github.com/siderolabs/pkgs under your GitHub org
+#      → copy patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch
+#        into kernel/build/patches/ in that fork and push
+#      → GitHub Actions builds a custom kernel; note the resulting pkgs tag
+#   2. Fork https://github.com/siderolabs/talos under your GitHub org
+#      → update the siderolabs/pkgs version pin to your fork's tag
+#      → push; GitHub Actions builds installer-base + imager
+#   3. Set CUSTOM_IMAGER and CUSTOM_INSTALLER_BASE below (or via env/CLI)
+#
+# Example:
+#   make build CUSTOM_IMAGER=ghcr.io/wheetazlab/talos-imager:v1.12.4-macb-fix \
+#              CUSTOM_INSTALLER_BASE=ghcr.io/wheetazlab/talos-installer-base:v1.12.4-macb-fix
+CUSTOM_IMAGER           ?=
+CUSTOM_INSTALLER_BASE   ?=
+
 # --- Image refs ----------------------------------------------------------------
-IMAGER_IMAGE        := ghcr.io/siderolabs/imager:$(TALOS_VERSION)
-INSTALLER_BASE      := ghcr.io/siderolabs/installer-base:$(TALOS_VERSION)
+IMAGER_IMAGE        := $(if $(CUSTOM_IMAGER),$(CUSTOM_IMAGER),ghcr.io/siderolabs/imager:$(TALOS_VERSION))
+INSTALLER_BASE      := $(if $(CUSTOM_INSTALLER_BASE),$(CUSTOM_INSTALLER_BASE),ghcr.io/siderolabs/installer-base:$(TALOS_VERSION))
 OVERLAY_IMAGE       := ghcr.io/siderolabs/sbc-raspberrypi:$(SBC_RPI_VERSION)
 ISCSI_TOOLS_IMAGE   := ghcr.io/siderolabs/iscsi-tools:$(ISCSI_TOOLS_VERSION)
 UTIL_LINUX_IMAGE    := ghcr.io/siderolabs/util-linux-tools:$(UTIL_LINUX_VERSION)
