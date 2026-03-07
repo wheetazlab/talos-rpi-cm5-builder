@@ -4,7 +4,7 @@
 
 Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM5** on CM4IO-compatible carrier boards (e.g. DeskPi Super6C).
 
-Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards).
+Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards). Also ships a patched kernel that fixes intermittent TX stalls in the `macb` Ethernet driver caused by PCIe posted-write ordering on the RP1 southbridge.
 
 ## Background
 
@@ -13,6 +13,25 @@ Talos ≤ v1.12.2 could not boot on CM5 boards (Rev 1.1 / D0 BCM2712 stepping) d
 NVMe boot support is provided by a patched U-Boot (`v2026.04-rc1`) with BCM2712 PCIe driver support, contributed by [@appkins](https://github.com/appkins) via [siderolabs/sbc-raspberrypi#81](https://github.com/siderolabs/sbc-raspberrypi/issues/81).
 
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
+
+### macb Ethernet TX stall fix (kernel patch)
+
+Talos 1.12.x ships kernel 6.18.x. On CM5, the `macb` Ethernet driver (Cadence GEM) sits behind the RP1 southbridge over PCIe. PCIe uses **posted writes** for MMIO — the CPU fires the write and continues without confirmation. Under load, the write of `NCR |= TSTART` (transmit start) can be silently dropped by RP1, leaving the TX ring permanently stalled with **no kernel error, no watchdog timeout, and PHY link staying UP**. The node becomes unreachable on the network while still responding to ping from the local side and appearing healthy from the kernel's perspective.
+
+The fix is a **PCIe read-after-write barrier**: immediately after each TSTART write, read NCR back. A PCIe non-posted read cannot complete until all prior posted writes from the same requester have been delivered — so by the time `macb_readl(bp, NCR)` returns, TSTART is guaranteed to have reached RP1.
+
+```c
+macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
+(void)macb_readl(bp, NCR);  /* flush posted write over PCIe */
+```
+
+This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_restart()` (NAPI retry path). See [`patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch`](patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch).
+
+**Why a custom kernel?** `CONFIG_MACB=y` — macb is compiled directly into `vmlinuz`, not a loadable module. There is no `macb.ko` to replace. The only fix is rebuilding `vmlinuz`, which is what the patched imager workflow does.
+
+**Why not the RPi downstream fix?** The RPi fix ([`359f37f`](https://github.com/raspberrypi/linux/commit/359f37f0faefb712add32a39f98751aea67d5c1f)) uses a `queue->tx_pending` flag, but in kernel 6.18 that field means ethtool ring buffer size — incompatible. The mainline fix ([`bf9cf80`](https://github.com/torvalds/linux/commit/bf9cf80)) addresses a related ring-pointer mismatch but depends on prerequisites not in 6.18.x stable as of 6.18.15. This patch addresses the MMIO ordering root cause independently.
+
+Tracked at: [siderolabs/sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82)
 
 ---
 
@@ -64,6 +83,10 @@ All versions are configurable — see [Customization](#customization).
 
 Images are built automatically on GitHub Actions using a native **Ubuntu arm64** runner — no cross-compilation needed.
 
+### Workflow 1: Build and Publish (`publish.yml`)
+
+The standard image build pipeline.
+
 **Triggers:**
 - Push a version tag (e.g. `git tag v1.12.4 && git push --tags`) → full build + publish
 - Manual run via **Actions → Build and Publish → Run workflow** with optional version override
@@ -77,6 +100,30 @@ Images are built automatically on GitHub Actions using a native **Ubuntu arm64**
    - Pushes installer to GHCR tagged `:vX.Y.Z-lite` / `:vX.Y.Z-emmc`
    - Uploads `metal-arm64-lite.raw.xz` / `metal-arm64-emmc.raw.xz` as artifacts
 4. **`release`** — downloads both artifacts and creates the GitHub release with both images attached
+
+To use the patched kernel, trigger this workflow with the `custom_imager` input set to the tag output by the patched imager workflow below.
+
+### Workflow 2: Build Patched Imager (`build-patched-imager.yml`)
+
+Builds the macb-patched kernel and assembles a drop-in replacement imager. Run this first when the kernel version changes or to refresh the fix.
+
+**Trigger:** Manual only — **Actions → Build Patched Imager (macb RP1 PCIe fix) → Run workflow**
+
+**What it does (no fork needed):**
+1. Clones `siderolabs/pkgs` at the matching release branch (ephemeral, thrown away after the run)
+2. Copies `patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch` into the pkgs kernel patch directory
+3. Runs `docker buildx build --target=kernel` via `siderolabs/bldr` — downloads Linux source, applies all upstream patches plus ours, compiles `vmlinuz` (~40–90 min on a 4-core arm64 runner)
+4. Pushes the patched kernel OCI to GHCR: `ghcr.io/wheetazlab/talos-rpi-cm5-builder/kernel:<ver>-macb-fix`
+5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager and replaces only `usr/install/arm64/vmlinuz` with the patched one
+6. Pushes the patched imager to GHCR: `ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:<ver>-macb-fix`
+7. Writes a job summary with the exact `custom_imager` tag to pass to the publish workflow
+
+**Two-workflow sequence to publish a patched release:**
+```
+Actions → Build Patched Imager → Run workflow
+  ↓ (wait ~90 min, copy custom_imager tag from job summary)
+Actions → Build and Publish → Run workflow  [custom_imager: ghcr.io/.../imager:1.12.4-macb-fix]
+```
 
 > **⚠️ Required GitHub permissions (org repos only)**
 >
@@ -203,7 +250,7 @@ make help           Show all targets and version variables
 
 ## What's in the image?
 
-- Talos Linux kernel + initramfs (arm64)
+- Talos Linux kernel + initramfs (arm64) — **patched vmlinuz** with macb RP1 PCIe TSTART flush fix
 - **Patched U-Boot** (`v2026.04-rc1`) with BCM2712 PCIe driver — enables NVMe boot on CM5
 - DTBs from `sbc-raspberrypi v0.2.0`:
   - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)
@@ -252,6 +299,7 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-inst
 
 ## References
 
+**Talos / SBC**
 - [Talos Linux docs — SBC support](https://www.talos.dev/v1.12/talos-guides/install/single-board-computers/)
 - [sbc-raspberrypi releases](https://github.com/siderolabs/sbc-raspberrypi/releases)
 - [NVMe boot patch (sbc-raspberrypi#81)](https://github.com/siderolabs/sbc-raspberrypi/issues/81)
@@ -259,3 +307,9 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-inst
 - [Original boot issue (talos#12748)](https://github.com/siderolabs/talos/issues/12748)
 - [Talos system extensions](https://www.talos.dev/v1.12/talos-guides/configuration/system-extensions/)
 - [DeskPi Super6C](https://deskpi.com/products/deskpi-super6c-raspberry-pi-cm4-6-boards-cluster-mini-itx-board) — example CM4IO-compatible carrier board
+
+**macb RP1 PCIe TX stall**
+- [macb TX stall issue (sbc-raspberrypi#82)](https://github.com/siderolabs/sbc-raspberrypi/issues/82) — upstream tracking issue
+- [RPi downstream fix `359f37f`](https://github.com/raspberrypi/linux/commit/359f37f0faefb712add32a39f98751aea67d5c1f) — rpi-6.12.y (incompatible with 6.18 `tx_pending` semantics)
+- [Mainline fix `bf9cf80`](https://github.com/torvalds/linux/commit/bf9cf80) — net: macb: Fix tx/rx malfunction after phy link down/up (not yet in 6.18.x stable)
+- [Cadence GEM (macb) driver](https://elixir.bootlin.com/linux/v6.18.9/source/drivers/net/ethernet/cadence/macb_main.c) — `macb_start_xmit()` and `macb_tx_restart()` are the patched functions
