@@ -118,14 +118,17 @@ The standard image build pipeline. Builds disk images and the upgrade installer 
    - Uploads `metal-arm64-lite.raw.xz` / `metal-arm64-emmc.raw.xz` as artifacts
 4. **`release`** — downloads both artifacts and creates the GitHub release with both images attached
 
-To include the patched kernel, run the workflow manually and set the `custom_imager` input to the tag from step 1's job summary. Without it, the standard unpatched Talos imager is used.
+The patched imager tag is computed automatically from `github.repository_owner` and the resolved `TALOS_VERSION` — no manual input required. Step 2 always uses the patched kernel as long as step 1 has been run at least once for the current kernel version.
 
 **Full sequence to publish a patched release:**
 ```
-Step 1: Actions → Build Patched Imager → Run workflow
-        ↓ wait ~90 min → copy custom_imager tag from job summary
-Step 2: Actions → Build and Publish → Run workflow
-        custom_imager: ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix
+Step 1 (once per kernel version):
+  Actions → Build Patched Imager → Run workflow
+  ↓ wait ~90 min
+
+Step 2 (every release):
+  Actions → Build and Publish → Run workflow
+  ↓ automatically uses ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix
 ```
 
 > **⚠️ Required GitHub permissions (org repos only)**
