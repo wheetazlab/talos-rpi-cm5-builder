@@ -23,30 +23,18 @@ DOCKER="${DOCKER:-podman}"
 OVERLAY="rpi_5"
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/_out"
 DISK=""
-# Custom kernel fork overrides -- set these when using a patched talos build
-# (e.g. the macb RP1 PCIe TSTART fix). Leave empty to use upstream images.
-CUSTOM_IMAGER="${CUSTOM_IMAGER:-}"
-CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-}"
 
 # --- Arg parsing ---------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --talos)              TALOS_VERSION="$2";          shift 2 ;;
-    --sbc)                SBC_RPI_VERSION="$2";        shift 2 ;;
-    --iscsi)              ISCSI_TOOLS_VERSION="$2";    shift 2 ;;
-    --util-linux)         UTIL_LINUX_VERSION="$2";     shift 2 ;;
-    --disk)               DISK="$2";                   shift 2 ;;
-    --docker)             DOCKER="$2";                 shift 2 ;;
-    --custom-imager)      CUSTOM_IMAGER="$2";          shift 2 ;;
-    --custom-installer)   CUSTOM_INSTALLER_BASE="$2";  shift 2 ;;
+    --talos)    TALOS_VERSION="$2"; shift 2 ;;
+    --sbc)      SBC_RPI_VERSION="$2"; shift 2 ;;
+    --iscsi)    ISCSI_TOOLS_VERSION="$2"; shift 2 ;;
+    --util-linux) UTIL_LINUX_VERSION="$2"; shift 2 ;;
+    --disk)     DISK="$2";   shift 2 ;;
+    --docker)   DOCKER="$2"; shift 2 ;;
     --help|-h)
-      echo "Usage: $0 [--talos VERSION] [--sbc VERSION] [--iscsi VERSION] [--util-linux VERSION]"
-      echo "       [--disk /dev/rdiskN] [--docker podman|docker]"
-      echo "       [--custom-imager IMAGE] [--custom-installer IMAGE]"
-      echo ""
-      echo "Custom kernel overrides (for patched builds, e.g. macb RP1 PCIe fix):"
-      echo "  --custom-imager     ghcr.io/wheetazlab/talos-imager:v1.12.4-macb-fix"
-      echo "  --custom-installer  ghcr.io/wheetazlab/talos-installer-base:v1.12.4-macb-fix"
+      echo "Usage: $0 [--talos VERSION] [--sbc VERSION] [--iscsi VERSION] [--util-linux VERSION] [--disk /dev/rdiskN] [--docker podman|docker]"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -54,8 +42,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Image references ----------------------------------------------------------
-IMAGER_IMAGE="${CUSTOM_IMAGER:-ghcr.io/siderolabs/imager:${TALOS_VERSION}}"
-INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/siderolabs/installer-base:${TALOS_VERSION}}"
+IMAGER_IMAGE="ghcr.io/siderolabs/imager:${TALOS_VERSION}"
+INSTALLER_BASE="ghcr.io/siderolabs/installer-base:${TALOS_VERSION}"
 OVERLAY_IMAGE="ghcr.io/siderolabs/sbc-raspberrypi:${SBC_RPI_VERSION}"
 ISCSI_TOOLS_IMAGE="ghcr.io/siderolabs/iscsi-tools:${ISCSI_TOOLS_VERSION}"
 UTIL_LINUX_IMAGE="ghcr.io/siderolabs/util-linux-tools:${UTIL_LINUX_VERSION}"
@@ -73,8 +61,6 @@ echo " util-linux-tools    : ${UTIL_LINUX_VERSION}"
 echo " Architecture        : ${ARCH}"
 echo " Output directory    : ${OUT_DIR}"
 echo " Target disk         : ${DISK:-<not set, skipping flash>}"
-[[ -n "${CUSTOM_IMAGER}" ]] && echo " ⚠ Custom imager     : ${CUSTOM_IMAGER}"
-[[ -n "${CUSTOM_INSTALLER_BASE}" ]] && echo " ⚠ Custom installer  : ${CUSTOM_INSTALLER_BASE}"
 echo "============================================================"
 echo ""
 

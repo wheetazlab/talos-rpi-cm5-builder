@@ -10,14 +10,6 @@ on:
         description: 'Talos version override (e.g. v1.12.4) — leave blank to use Makefile default'
         required: false
         default: ''
-      custom_imager:
-        description: 'Patched imager from build-patched-imager workflow (contains fixed vmlinuz). Leave blank to use upstream siderolabs/imager.'
-        required: false
-        default: ''
-      custom_installer_base:
-        description: 'Custom installer-base (Go installer binary override only — does NOT affect the kernel). Leave blank for upstream.'
-        required: false
-        default: ''
 
 jobs:
   # ── Resolve the Talos version once and share it across all jobs ─────────────
@@ -98,20 +90,13 @@ jobs:
         run: sudo apt-get install -y xz-utils
 
       - name: Build Talos image
-        run: |
-          MAKE_ARGS="TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }}"
-          [[ -n "${{ github.event.inputs.custom_imager }}" ]] && MAKE_ARGS+=' CUSTOM_IMAGER="${{ github.event.inputs.custom_imager }}"'
-          [[ -n "${{ github.event.inputs.custom_installer_base }}" ]] && MAKE_ARGS+=' CUSTOM_INSTALLER_BASE="${{ github.event.inputs.custom_installer_base }}"'
-          make build $MAKE_ARGS
+        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }}
 
       - name: Inject U-Boot into image
         run: make uboot-inject
 
       - name: Build installer
-        run: |
-          MAKE_ARGS="TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }}"
-          [[ -n "${{ github.event.inputs.custom_installer_base }}" ]] && MAKE_ARGS+=' CUSTOM_INSTALLER_BASE="${{ github.event.inputs.custom_installer_base }}"'
-          make installer $MAKE_ARGS
+        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }}
 
       - name: Push installer to GHCR
         run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.TALOS_VERSION }}-${{ matrix.cm5_variant }}
