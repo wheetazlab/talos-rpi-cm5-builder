@@ -29,6 +29,10 @@ else
 SDHCI_KERNEL_ARG :=
 endif
 
+# Extra kernel args — pass as a space-separated list of --extra-kernel-arg="..." flags
+# e.g. make build EXTRA_KERNEL_ARGS='--extra-kernel-arg="cma=256M"'
+EXTRA_KERNEL_ARGS ?=
+
 # --- GHCR publish config -------------------------------------------------------
 GHCR_ORG        ?= wheetazlab
 GHCR_REPO       ?= talos-rpi-cm5-installer
@@ -90,6 +94,7 @@ build: $(OUT_DIR)
 		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
 		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
 		$(SDHCI_KERNEL_ARG) \
+		$(EXTRA_KERNEL_ARGS) \
 		--arch $(ARCH)
 	@echo ""
 	@echo "==> Build complete!"
@@ -111,6 +116,7 @@ installer: $(OUT_DIR)
 		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
 		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
 		$(SDHCI_KERNEL_ARG) \
+		$(EXTRA_KERNEL_ARGS) \
 		--arch $(ARCH)
 	@echo "==> Installer image saved to $(INSTALLER_TAR)"
 
