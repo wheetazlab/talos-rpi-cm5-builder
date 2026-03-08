@@ -112,16 +112,13 @@ jobs:
       # BuildKit fetches the bldr image automatically from GHCR (already authenticated).
       # SOURCE_DATE_EPOCH is required by bldr for reproducible builds.
       # Since pkgs was downloaded as a tarball (no .git dir), fetch the commit
-      # timestamp from the GitHub API instead.
+      # timestamp via the GitHub commits API (jq + date parse).
       - name: Build patched kernel package (~40–90 min)
         run: |
           EPOCH=$(curl -fsSL \
             "https://api.github.com/repos/siderolabs/pkgs/commits/${{ env.PKGS_REF }}" \
-            | python3 -c "
-import sys, json, datetime
-d = json.load(sys.stdin)['commit']['committer']['date']
-print(int(datetime.datetime.fromisoformat(d.replace('Z','+00:00')).timestamp()))
-")
+            | jq -r '.commit.committer.date' \
+            | xargs -I{} date -d {} +%s)
           echo "SOURCE_DATE_EPOCH=${EPOCH}"
           docker buildx build \
             --file=/tmp/pkgs/Pkgfile \
