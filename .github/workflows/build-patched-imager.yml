@@ -91,13 +91,14 @@ jobs:
           echo "Imager image : ${IMAGER_TAG}"
 
       # ── Clone & patch pkgs ──────────────────────────────────────────────────
-      - name: Clone siderolabs/pkgs @ ${{ env.PKGS_REF }}
+      # GitHub does not support `git fetch <sha>` for arbitrary commits.
+      # Use the archive API instead — works for any SHA, tag, or branch ref.
+      - name: Download siderolabs/pkgs @ ${{ env.PKGS_REF }}
         run: |
-          git init /tmp/pkgs
-          git -C /tmp/pkgs remote add origin https://github.com/siderolabs/pkgs.git
-          git -C /tmp/pkgs fetch --depth=1 origin "${{ env.PKGS_REF }}"
-          git -C /tmp/pkgs checkout FETCH_HEAD
-          echo "pkgs HEAD: $(git -C /tmp/pkgs log --oneline -1)"
+          mkdir -p /tmp/pkgs
+          curl -fsSL "https://github.com/siderolabs/pkgs/archive/${{ env.PKGS_REF }}.tar.gz" \
+            | tar -xz --strip-components=1 -C /tmp/pkgs
+          echo "pkgs extracted at ref: ${{ env.PKGS_REF }}"
 
       - name: Apply macb patch to pkgs
         run: |
@@ -110,11 +111,17 @@ jobs:
       # The pkgs Pkgfile uses siderolabs/bldr as a BuildKit custom frontend.
       # BuildKit fetches the bldr image automatically from GHCR (already authenticated).
       # SOURCE_DATE_EPOCH is required by bldr for reproducible builds.
+      # Since pkgs was downloaded as a tarball (no .git dir), fetch the commit
+      # timestamp from the GitHub API instead.
       - name: Build patched kernel package (~40–90 min)
         run: |
-          EPOCH=$(git -C /tmp/pkgs log \
-            "$(git -C /tmp/pkgs rev-list --max-parents=0 HEAD)" \
-            --pretty=%ct)
+          EPOCH=$(curl -fsSL \
+            "https://api.github.com/repos/siderolabs/pkgs/commits/${{ env.PKGS_REF }}" \
+            | python3 -c "
+import sys, json, datetime
+d = json.load(sys.stdin)['commit']['committer']['date']
+print(int(datetime.datetime.fromisoformat(d.replace('Z','+00:00')).timestamp()))
+")
           echo "SOURCE_DATE_EPOCH=${EPOCH}"
           docker buildx build \
             --file=/tmp/pkgs/Pkgfile \
