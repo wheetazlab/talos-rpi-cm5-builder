@@ -87,13 +87,13 @@ jobs:
         run: sudo apt-get install -y xz-utils
 
       - name: Build Talos image
-        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} EXTRA_KERNEL_ARGS='--extra-kernel-arg="cma=256M"'
+        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }}
 
       - name: Inject U-Boot into image
         run: make uboot-inject
 
       - name: Build installer
-        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} EXTRA_KERNEL_ARGS='--extra-kernel-arg="cma=256M"'
+        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }}
 
       - name: Push installer to GHCR
         run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.TALOS_VERSION }}-${{ matrix.cm5_variant }}
