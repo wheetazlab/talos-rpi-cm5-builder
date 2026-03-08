@@ -9,8 +9,9 @@ name: Build Patched Imager (macb RP1 PCIe fix)
 #
 # Fix
 # ───
-# Add `(void)macb_readl(bp, NCR)` after each TSTART write (PCIe read-after-write
-# flush). The pending posted write is ordered before the read can complete.
+# Add `(void)readl(bp->regs + MACB_NCR)` after each TSTART write (PCIe read-after-
+# write flush). readl() includes a DSB on arm64, and the PCIe non-posted read
+# orders all prior posted writes before it can complete.
 # See: patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch
 #
 # Why CONFIG_MACB=y matters

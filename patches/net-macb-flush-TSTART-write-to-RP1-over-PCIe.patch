@@ -11,11 +11,17 @@ whether to queue a new transmission, leaving the TX ring permanently
 stalled with no error interrupt, rising PHY link state, or watchdog
 timeout visible to the kernel.
 
-Fix by following every TSTART write with a non-posted NCR readback.
-A PCIe non-posted read creates an implicit ordering barrier: the bus
-fabric cannot return the read response until all prior posted writes from
-the same requester have been delivered.  After the read returns, TSTART
-is guaranteed to have reached RP1.
+Fix by following every TSTART write with a readl() (non-relaxed) NCR
+readback.  On arm64, readl() includes a DSB (Data Synchronization Barrier)
+instruction, preventing CPU out-of-order execution past this point.  The
+resulting PCIe non-posted read also creates a protocol-level ordering
+barrier: the bus fabric cannot return the read completion until all prior
+posted writes from the same requester have been delivered.  After readl()
+returns, TSTART is guaranteed to have reached RP1.
+
+Note: macb_readl() wraps readl_relaxed() which omits the DSB.  Using the
+bare readl() with the explicit MMIO offset (bp->regs + MACB_NCR) provides
+stronger CPU-level ordering guarantees.
 
 The readback is added in both:
   - macb_start_xmit()    -- the primary per-packet TX start path
@@ -55,9 +61,10 @@ diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cad
  	spin_lock(&bp->lock);
  	macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
 +	/* RP1 is behind PCIe; posted TSTART writes can be silently dropped.
-+	 * A non-posted read forces all prior posted writes to be delivered
-+	 * before we return, guaranteeing TSTART reached the hardware. */
-+	(void)macb_readl(bp, NCR);
++	 * readl() (non-relaxed) includes a DSB on arm64, which both prevents
++	 * CPU out-of-order execution past this point and, via the resulting
++	 * PCIe non-posted read, flushes all prior posted writes to RP1. */
++	(void)readl(bp->regs + MACB_NCR);
  	spin_unlock(&bp->lock);
  
  out_tx_ptr_unlock:
@@ -65,9 +72,10 @@ diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cad
  	spin_lock(&bp->lock);
  	macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
 +	/* RP1 is behind PCIe; posted TSTART writes can be silently dropped.
-+	 * A non-posted read forces all prior posted writes to be delivered
-+	 * before we return, guaranteeing TSTART reached the hardware. */
-+	(void)macb_readl(bp, NCR);
++	 * readl() (non-relaxed) includes a DSB on arm64, which both prevents
++	 * CPU out-of-order execution past this point and, via the resulting
++	 * PCIe non-posted read, flushes all prior posted writes to RP1. */
++	(void)readl(bp->regs + MACB_NCR);
  	spin_unlock(&bp->lock);
  
  	if (CIRC_SPACE(queue->tx_head, queue->tx_tail, bp->tx_ring_size) < 1)
