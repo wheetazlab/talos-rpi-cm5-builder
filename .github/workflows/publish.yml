@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       talos_version:
-        description: 'Talos version override (e.g. v1.12.4) — leave blank to use Makefile default'
+        description: 'Base Talos version (e.g. v1.12.4). Patched release/installer tags will use <version>-macb-fix.'
         required: false
         default: ''
 
