@@ -125,11 +125,18 @@ compress:
 	@test -f "$(XZ_IMAGE)" || (echo "ERROR: $(XZ_IMAGE) not found. Run 'make build' first." && exit 1)
 	@echo "==> $(XZ_IMAGE) already compressed (imager outputs .xz directly):" && ls -lh $(XZ_IMAGE)
 
-## push-installer: Load installer OCI tar and push to ghcr.io/$(GHCR_ORG)
+## push-installer: Load installer OCI tar, inject NVMe U-Boot, tag and push to ghcr.io/$(GHCR_ORG)
 push-installer:
 	@test -f "$(INSTALLER_TAR)" || (echo "ERROR: $(INSTALLER_TAR) not found. Run 'make installer' first." && exit 1)
+	@test -f "$(UBOOT_BIN)" || (echo "ERROR: $(UBOOT_BIN) not found. Run 'make uboot-build' first." && exit 1)
 	@echo "==> Loading $(INSTALLER_TAR) into $(DOCKER)..."
 	$(DOCKER) load -i $(INSTALLER_TAR)
+	@echo "==> Injecting NVMe U-Boot into installer image..."
+	@$(DOCKER) rm -f talos-installer-uboot-patch 2>/dev/null || true; \
+		$(DOCKER) create --name talos-installer-uboot-patch ghcr.io/siderolabs/installer-base:$(TALOS_VERSION) >/dev/null && \
+		$(DOCKER) cp $(UBOOT_BIN) talos-installer-uboot-patch:/overlay/artifacts/arm64/u-boot/rpi_generic/u-boot.bin && \
+		$(DOCKER) commit talos-installer-uboot-patch ghcr.io/siderolabs/installer-base:$(TALOS_VERSION) >/dev/null && \
+		$(DOCKER) rm talos-installer-uboot-patch >/dev/null
 	@echo "==> Tagging as $(GHCR_IMAGE)"
 	$(DOCKER) tag ghcr.io/siderolabs/installer-base:$(TALOS_VERSION) $(GHCR_IMAGE)
 	@echo "==> Pushing $(GHCR_IMAGE)"
