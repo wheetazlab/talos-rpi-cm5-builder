@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     outputs:
       talos_version: ${{ steps.version.outputs.version }}
+      patched_release_tag: ${{ steps.version.outputs.patched_release_tag }}
       extensions: ${{ steps.version.outputs.extensions }}
     steps:
       - name: Checkout
@@ -33,6 +34,7 @@ jobs:
             VERSION=$(grep '^TALOS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "patched_release_tag=${VERSION}-macb-fix" >> "$GITHUB_OUTPUT"
 
           ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
@@ -70,6 +72,7 @@ jobs:
     env:
       DOCKER: docker
       TALOS_VERSION: ${{ needs.resolve-version.outputs.talos_version }}
+      PATCHED_RELEASE_TAG: ${{ needs.resolve-version.outputs.patched_release_tag }}
       CM5_VARIANT: ${{ matrix.cm5_variant }}
       REGISTRY: ghcr.io
       REGISTRY_USERNAME: ${{ github.repository_owner }}
@@ -105,7 +108,7 @@ jobs:
         run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }}
 
       - name: Push installer to GHCR
-        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.TALOS_VERSION }}-${{ matrix.cm5_variant }}
+        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }}-${{ matrix.cm5_variant }}
 
       - name: Rename disk image with variant suffix
         run: mv _out/metal-arm64.raw.xz _out/metal-arm64-${{ matrix.cm5_variant }}.raw.xz
@@ -124,6 +127,7 @@ jobs:
       contents: write
     env:
       TALOS_VERSION: ${{ needs.resolve-version.outputs.talos_version }}
+      PATCHED_RELEASE_TAG: ${{ needs.resolve-version.outputs.patched_release_tag }}
       EXTENSIONS: ${{ needs.resolve-version.outputs.extensions }}
       REGISTRY: ghcr.io
       REGISTRY_USERNAME: ${{ github.repository_owner }}
@@ -165,8 +169,8 @@ jobs:
 
           - 📦 **\`metal-arm64-lite.raw.xz\`** — CM5 Lite (no onboard eMMC)
           - 📦 **\`metal-arm64-emmc.raw.xz\`** — CM5 with onboard eMMC
-          - ⚙️  **Installer — CM5 Lite:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.TALOS_VERSION }}-lite\`
-          - ⚙️  **Installer — CM5 eMMC:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.TALOS_VERSION }}-emmc\`
+          - ⚙️  **Installer — CM5 Lite:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-lite\`
+          - ⚙️  **Installer — CM5 eMMC:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-emmc\`
 
           ### Install
 
@@ -177,18 +181,18 @@ jobs:
           - **Upgrade existing node**
             \`\`\`bash
             # CM5 Lite
-            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.TALOS_VERSION }}-lite
+            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-lite
             # CM5 with eMMC
-            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.TALOS_VERSION }}-emmc
+            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-emmc
             \`\`\`
 
           EOF
           )
-          gh release delete ${{ env.TALOS_VERSION }} --yes 2>/dev/null || true
+          gh release delete ${{ env.PATCHED_RELEASE_TAG }} --yes 2>/dev/null || true
           gh release create \
-            ${{ env.TALOS_VERSION }} \
+            ${{ env.PATCHED_RELEASE_TAG }} \
             ./_out/metal-arm64-lite.raw.xz \
             ./_out/metal-arm64-emmc.raw.xz \
-            --title "${{ env.TALOS_VERSION }}" \
+            --title "${{ env.PATCHED_RELEASE_TAG }}" \
             $([[ "${{ env.TALOS_VERSION }}" =~ -(alpha|beta|rc)\. ]] && echo "--prerelease") \
             --notes "$NOTES"
