@@ -135,8 +135,14 @@ jobs:
           NOTES=$(cat <<EOF
           > ⚠️ Experimental build, use at your own risk.
 
-          This is a patched version of Talos tailored for the Raspberry Pi CM5,
-          including NVMe/PCIe, iscsi-tools, and util-linux-tools support.
+          This is the **stock kernel** CM5 release line.
+
+          ### Build type
+
+          - Kernel: **stock Talos kernel**
+          - Imager source: stock \`ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}\`
+          - U-Boot: includes the CM5/RPi5 NVMe-capable U-Boot patch used by this repo
+          - Extras: includes \`iscsi-tools\` and \`util-linux-tools\`
 
           ### Extensions included
 
