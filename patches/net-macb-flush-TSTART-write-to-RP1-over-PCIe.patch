@@ -11,19 +11,20 @@ whether to queue a new transmission, leaving the TX ring permanently
 stalled with no error interrupt, rising PHY link state, or watchdog
 timeout visible to the kernel.
 
-Fix by following every TSTART write with a macb_readl(bp, NCR) readback.
-macb_readl() wraps readl_relaxed(), which on arm64 still issues a real
-PCIe non-posted read transaction.  The PCIe spec requires that a
-non-posted read completion cannot be returned until all prior posted writes
-from the same requester have been delivered; this is the canonical
-"PCIe read-after-write fence".  After the readback returns, TSTART is
-guaranteed to have reached RP1.
+Fix by following every TSTART write with a readl() (non-relaxed) NCR
+readback.  On arm64, readl() includes a DSB (Data Synchronization
+Barrier) instruction which stalls the CPU pipeline until the read
+completes.  The resulting PCIe non-posted read also creates a protocol-
+level ordering barrier: the bus fabric cannot return the read completion
+until all prior posted writes from the same requester have been
+delivered.  After readl() returns, TSTART is guaranteed to have reached
+RP1 and the CPU cannot speculatively race ahead into the next TX path.
 
-Using macb_readl() rather than the heavier readl() (which adds a DSB
-barrier) is deliberate: the spin_lock() surrounding the write already
-provides the necessary CPU memory ordering.  The relaxed readback is
-sufficient for the PCIe ordering guarantee alone and avoids potential
-LTO interactions from adding a bare DSB in a hot path.
+Using readl() (non-relaxed) rather than macb_readl() / readl_relaxed()
+is deliberate: while the PCIe ordering guarantee is the same, the DSB
+prevents the CPU from re-entering macb_start_xmit() before the prior
+TSTART write has been confirmed delivered.  Under sustained TX load on
+RP1's PCIe link this close-the-window guarantee matters.
 
 The readback is added in both:
   - macb_start_xmit()    -- the primary per-packet TX start path
@@ -35,41 +36,39 @@ no kernel errors.  Recovery: `ip link set end0 down && ip link set end0
 up`.  Stable on Talos 1.11.x / kernel 6.12.x (RP1 supported via
 siderolabs/pkgs downstream patches, now mainline since 6.13).
 
-The Raspberry Pi downstream kernel (rpi-6.12.y, commit e45c98d) uses a
-similar macb_readl(bp, TSR) read before TSTART to flush prior writes.
-This patch uses macb_readl(bp, NCR) after TSTART for an explicit
-post-write fence covering both TX start paths.
+The Raspberry Pi downstream kernel (rpi-6.12.y, commit e45c98d) uses
+macb_readl(bp, TSR) before TSTART to flush prior writes.  This patch
+uses readl() after TSTART for an explicit post-write fence with full
+CPU synchronization, covering both TX start paths.
 
 Link: https://github.com/siderolabs/sbc-raspberrypi/issues/82
 Link: https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1
 Signed-off-by: Stephen Wheet <stephen@wheetazlab.io>
 ---
- drivers/net/ethernet/cadence/macb_main.c | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+ drivers/net/ethernet/cadence/macb_main.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
 
 diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
 --- a/drivers/net/ethernet/cadence/macb_main.c
 +++ b/drivers/net/ethernet/cadence/macb_main.c
-@@ -1716,6 +1716,11 @@ static void macb_tx_restart(struct macb_queue *queue)
+@@ -1716,6 +1716,10 @@ static void macb_tx_restart(struct macb_queue *queue)
  
  	spin_lock(&bp->lock);
  	macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
 +	/* RP1 is behind PCIe; posted TSTART writes can be silently dropped.
-+	 * macb_readl() issues a PCIe non-posted read which, per PCIe ordering
-+	 * rules, cannot complete until all prior posted writes from this
-+	 * requester have been delivered — fencing the TSTART write to RP1. */
-+	(void)macb_readl(bp, NCR);
++	 * readl() (non-relaxed) includes DSB on arm64 — the CPU stalls until
++	 * the PCIe non-posted read completes, fencing TSTART to RP1. */
++	(void)readl(bp->regs + MACB_NCR);
  	spin_unlock(&bp->lock);
  
  out_tx_ptr_unlock:
-@@ -2390,6 +2395,11 @@ static netdev_tx_t macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
+@@ -2390,6 +2394,10 @@ static netdev_tx_t macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
  	spin_lock(&bp->lock);
  	macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
 +	/* RP1 is behind PCIe; posted TSTART writes can be silently dropped.
-+	 * macb_readl() issues a PCIe non-posted read which, per PCIe ordering
-+	 * rules, cannot complete until all prior posted writes from this
-+	 * requester have been delivered — fencing the TSTART write to RP1. */
-+	(void)macb_readl(bp, NCR);
++	 * readl() (non-relaxed) includes DSB on arm64 — the CPU stalls until
++	 * the PCIe non-posted read completes, fencing TSTART to RP1. */
++	(void)readl(bp->regs + MACB_NCR);
  	spin_unlock(&bp->lock);
  
  	if (CIRC_SPACE(queue->tx_head, queue->tx_tail, bp->tx_ring_size) < 1)
