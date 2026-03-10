@@ -1,3 +1,4 @@
+# check=skip=InvalidDefaultArgInFrom
 # Patched Talos imager — replaces arm64 vmlinuz AND kernel modules with our
 # patched kernel build (macb RP1 PCIe TSTART flush fix).
 #
