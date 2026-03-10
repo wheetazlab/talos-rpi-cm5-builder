@@ -29,7 +29,7 @@ This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_re
 
 **Why a custom kernel?** `CONFIG_MACB=y` — macb is compiled directly into `vmlinuz`, not a loadable module. There is no `macb.ko` to replace. The only fix is rebuilding `vmlinuz`, which is what the patched imager workflow does.
 
-**Why not the RPi downstream fix?** The RPi fix ([`359f37f`](https://github.com/raspberrypi/linux/commit/359f37f0faefb712add32a39f98751aea67d5c1f)) uses a `queue->tx_pending` flag, but in kernel 6.18 that field means ethtool ring buffer size — incompatible. The mainline fix ([`bf9cf80`](https://github.com/torvalds/linux/commit/bf9cf80)) addresses a related ring-pointer mismatch but depends on prerequisites not in 6.18.x stable as of 6.18.15. This patch addresses the MMIO ordering root cause independently.
+**Why `macb_readl()` not `readl()`?** The heavier `readl()` call adds an arm64 DSB barrier instruction. When the kernel is compiled with Clang ThinLTO (as Talos does), this DSB in a hot TX path caused unexpected binary layout changes that broke RP1 PCIe MSI-X vector allocation at probe time. `macb_readl()` uses `readl_relaxed()`, which still issues a real PCIe non-posted read transaction (sufficient to flush all prior posted writes per PCIe spec) without the DSB. This matches the approach used by the Raspberry Pi downstream kernel ([`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1)).
 
 Tracked at: [siderolabs/sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82)
 
