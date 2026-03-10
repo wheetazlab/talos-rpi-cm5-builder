@@ -69,18 +69,28 @@ done
 
 ISCSI_VERSION="$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 UTIL_VERSION="$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
-EXTENSIONS="ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION} ghcr.io/siderolabs/util-linux-tools:${UTIL_VERSION}"
-EXT_LIST=$(echo "${EXTENSIONS}" | tr ' ' '\n' | grep -v '^$' | sed 's|.*/\([^:@]*\):.*|- `\1`|' | sort -u || echo "_(none)_")
+SBC_VERSION="$(grep '^SBC_RPI_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
+UBOOT_VER="$(grep '^UBOOT_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
+PKGS_REF="$(grep '^PKGS_REF' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
+LINUX_KERNEL_VERSION="$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 
 NOTES=$(cat <<EOF
 > ⚠️ Experimental build, use at your own risk.
 
-This is a patched version of Talos tailored for the Raspberry Pi CM5,
-including NVMe/PCIe, iscsi-tools, and util-linux-tools support.
+This is a Talos build for the Raspberry Pi CM5.
 
-### Extensions included
+### Components
 
-${EXT_LIST}
+| Component | Version / Image |
+|-----------|------------------|
+| Imager | \`ghcr.io/siderolabs/imager:${TALOS_VERSION}\` |
+| Installer base | \`ghcr.io/siderolabs/installer-base:${TALOS_VERSION}\` |
+| Talos | \`${TALOS_VERSION}\` |
+| Kernel | Linux ${LINUX_KERNEL_VERSION} — \`siderolabs/pkgs@${PKGS_REF}\` — stock |
+| U-Boot | \`${UBOOT_VER}\` — patched: BCM2712 NVMe/PCIe |
+| SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${SBC_VERSION}\` |
+| iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION}\` |
+| util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${UTIL_VERSION}\` |
 
 ### config.txt overlay options
 

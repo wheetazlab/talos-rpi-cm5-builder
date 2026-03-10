@@ -10,6 +10,7 @@ ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.2
 UBOOT_VERSION        ?= v2026.04-rc1
 PKGS_REF             ?= b1fc4c6
+LINUX_KERNEL_VERSION ?= 6.18.9
 
 # --- Build config --------------------------------------------------------------
 ARCH        ?= arm64

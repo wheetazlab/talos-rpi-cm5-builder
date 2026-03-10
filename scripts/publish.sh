@@ -85,6 +85,9 @@ UTIL_VERSION="$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | 
 SBC_VERSION="$(grep '^SBC_RPI_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 UBOOT_VER="$(grep '^UBOOT_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 PKGS_REF="$(grep '^PKGS_REF' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
+LINUX_KERNEL_VERSION="$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
+VER="${TALOS_VERSION#v}"
+PATCHED_IMAGER_TAG="ghcr.io/${GHCR_ORG}/talos-rpi-cm5-builder/imager:${VER}-${PATCH_SUFFIX}"
 EXTENSIONS="ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION} ghcr.io/siderolabs/util-linux-tools:${UTIL_VERSION}"
 
 NOTES=$(cat <<EOF
@@ -96,8 +99,10 @@ This is a patched Talos build for the Raspberry Pi CM5.
 
 | Component | Version / Image |
 |-----------|------------------|
+| Imager | \`${PATCHED_IMAGER_TAG}\` |
+| Installer base | \`ghcr.io/siderolabs/installer-base:${TALOS_VERSION}\` |
 | Talos | \`${TALOS_VERSION}\` |
-| Kernel | Linux 6.18.x — \`siderolabs/pkgs@${PKGS_REF}\` — patched: macb RP1 PCIe TSTART flush |
+| Kernel | Linux ${LINUX_KERNEL_VERSION} — \`siderolabs/pkgs@${PKGS_REF}\` — patched: macb RP1 PCIe TSTART flush |
 | U-Boot | \`${UBOOT_VER}\` — patched: BCM2712 NVMe/PCIe |
 | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${SBC_VERSION}\` |
 | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION}\` |
