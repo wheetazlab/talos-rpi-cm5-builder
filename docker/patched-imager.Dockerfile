@@ -50,18 +50,20 @@ RUN mkdir -p /tmp/initramfs && \
     zstd -d < /tmp/initramfs.zst | cpio -idm
 
 # Extract rootfs.sqsh (zstd-compressed squashfs)
-RUN unsquashfs -d /tmp/rootfs /tmp/initramfs/rootfs.sqsh
+# -no-xattrs: Docker build containers cannot set security.selinux xattrs
+RUN unsquashfs -no-xattrs -d /tmp/rootfs /tmp/initramfs/rootfs.sqsh
 
 # Bring in patched modules (signed with our kernel's key)
 COPY --from=patched-kernel /usr/lib/modules /tmp/patched-modules
 
-# Replace modules: keep the stock whitelist set, swap with patched copies
+# Replace modules: iterate the stock whitelist, swap each .ko with our patched copy.
+# NOTE: do NOT put shell '#' comments inside a multi-line RUN block — Dockerfile
+# strips '\<newline>', so '#' in the joined string comments out everything after it.
 RUN set -eu; \
     STOCK_VER=$(ls /tmp/rootfs/usr/lib/modules/); \
     PATCH_VER=$(ls /tmp/patched-modules/); \
     echo "Stock kernel modules: ${STOCK_VER}"; \
     echo "Patched kernel modules: ${PATCH_VER}"; \
-    # List every .ko in the stock rootfs and replace with patched equivalent \
     find /tmp/rootfs/usr/lib/modules/"${STOCK_VER}" -name '*.ko' | while read -r stock_ko; do \
         rel=${stock_ko#/tmp/rootfs/usr/lib/modules/"${STOCK_VER}"/}; \
         patched_ko="/tmp/patched-modules/${PATCH_VER}/${rel}"; \
@@ -72,13 +74,12 @@ RUN set -eu; \
             rm -f "${stock_ko}"; \
         fi; \
     done; \
-    # Re-run depmod so modules.dep and friends match the new .ko files \
     depmod -b /tmp/rootfs "${STOCK_VER}"
 
 # Repack rootfs.sqsh
 RUN rm /tmp/initramfs/rootfs.sqsh && \
     fakeroot mksquashfs /tmp/rootfs /tmp/initramfs/rootfs.sqsh \
-        -all-root -noappend -comp zstd -no-progress
+        -all-root -noappend -comp zstd -no-xattrs -no-progress
 
 # Repack initramfs (cpio + zstd, matching Talos build)
 RUN cd /tmp/initramfs && \
