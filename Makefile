@@ -9,6 +9,7 @@ SBC_RPI_VERSION      ?= v0.2.0
 ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.2
 UBOOT_VERSION        ?= v2026.04-rc1
+PKGS_REF             ?= b1fc4c6
 
 # --- Build config --------------------------------------------------------------
 ARCH        ?= arm64

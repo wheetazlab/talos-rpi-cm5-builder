@@ -19,6 +19,11 @@ jobs:
       talos_version: ${{ steps.version.outputs.version }}
       patched_release_tag: ${{ steps.version.outputs.patched_release_tag }}
       extensions: ${{ steps.version.outputs.extensions }}
+      sbc_version: ${{ steps.version.outputs.sbc_version }}
+      uboot_version: ${{ steps.version.outputs.uboot_version }}
+      pkgs_ref: ${{ steps.version.outputs.pkgs_ref }}
+      iscsi_version: ${{ steps.version.outputs.iscsi_version }}
+      util_version: ${{ steps.version.outputs.util_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,7 +43,15 @@ jobs:
 
           ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
+          SBC=$(grep '^SBC_RPI_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
+          UBOOT=$(grep '^UBOOT_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
+          PKGS=$(grep '^PKGS_REF' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           echo "extensions=ghcr.io/siderolabs/iscsi-tools:${ISCSI} ghcr.io/siderolabs/util-linux-tools:${UTIL}" >> "$GITHUB_OUTPUT"
+          echo "sbc_version=${SBC}" >> "$GITHUB_OUTPUT"
+          echo "uboot_version=${UBOOT}" >> "$GITHUB_OUTPUT"
+          echo "pkgs_ref=${PKGS}" >> "$GITHUB_OUTPUT"
+          echo "iscsi_version=${ISCSI}" >> "$GITHUB_OUTPUT"
+          echo "util_version=${UTIL}" >> "$GITHUB_OUTPUT"
 
   # ── Build patched U-Boot once (variant-agnostic) ────────────────────────────
   build-uboot:
@@ -129,6 +142,11 @@ jobs:
       TALOS_VERSION: ${{ needs.resolve-version.outputs.talos_version }}
       PATCHED_RELEASE_TAG: ${{ needs.resolve-version.outputs.patched_release_tag }}
       EXTENSIONS: ${{ needs.resolve-version.outputs.extensions }}
+      SBC_VERSION: ${{ needs.resolve-version.outputs.sbc_version }}
+      UBOOT_VERSION: ${{ needs.resolve-version.outputs.uboot_version }}
+      PKGS_REF: ${{ needs.resolve-version.outputs.pkgs_ref }}
+      ISCSI_VERSION: ${{ needs.resolve-version.outputs.iscsi_version }}
+      UTIL_VERSION: ${{ needs.resolve-version.outputs.util_version }}
       REGISTRY: ghcr.io
       REGISTRY_USERNAME: ${{ github.repository_owner }}
       GH_REPO: ${{ github.repository }}
@@ -144,22 +162,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          EXT_LIST=$(echo "${{ env.EXTENSIONS }}" | tr ' ' '\n' | grep -v '^$' | sed 's|.*/\([^:@]*\):.*|- `\1`|' | sort -u || echo "_(none)_")
           NOTES=$(cat <<EOF
           > ⚠️ Experimental build, use at your own risk.
 
-          This is the **patched kernel** CM5 release line.
+          This is a patched Talos build for the Raspberry Pi CM5.
 
-          ### Build type
+          ### Components
 
-          - Kernel: **custom Talos kernel** with macb RP1 PCIe TX fix (\`TSTART\` flush/readback patch)
-          - Imager source: **custom patched imager** (not stock \`ghcr.io/siderolabs/imager\`)
-          - U-Boot: includes the CM5/RPi5 NVMe-capable U-Boot patch used by this repo
-          - Extras: includes \`iscsi-tools\` and \`util-linux-tools\`
-
-          ### Extensions included
-
-          ${EXT_LIST}
+          | Component | Version / Image |
+          |-----------|------------------|
+          | Talos | \`${{ env.TALOS_VERSION }}\` |
+          | Kernel | Linux 6.18.x — \`siderolabs/pkgs@${{ env.PKGS_REF }}\` — patched: macb RP1 PCIe TSTART flush |
+          | U-Boot | \`${{ env.UBOOT_VERSION }}\` — patched: BCM2712 NVMe/PCIe |
+          | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${{ env.SBC_VERSION }}\` |
+          | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}\` |
+          | util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${{ env.UTIL_VERSION }}\` |
 
           ### config.txt overlay options
 
