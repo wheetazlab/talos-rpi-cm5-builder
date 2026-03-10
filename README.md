@@ -18,11 +18,11 @@ Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/is
 
 Talos 1.12.x ships kernel 6.18.x. On CM5, the `macb` Ethernet driver (Cadence GEM) sits behind the RP1 southbridge over PCIe. PCIe uses **posted writes** for MMIO — the CPU fires the write and continues without confirmation. Under load, the write of `NCR |= TSTART` (transmit start) can be silently dropped by RP1, leaving the TX ring permanently stalled with **no kernel error, no watchdog timeout, and PHY link staying UP**. The node becomes unreachable on the network while still responding to ping from the local side and appearing healthy from the kernel's perspective.
 
-The fix is a **PCIe read-after-write barrier**: immediately after each TSTART write, read NCR back. A PCIe non-posted read cannot complete until all prior posted writes from the same requester have been delivered — so by the time `macb_readl(bp, NCR)` returns, TSTART is guaranteed to have reached RP1.
+The fix is a **PCIe read-after-write barrier**: immediately after each TSTART write, read NCR back via `readl()` (non-relaxed). On arm64, `readl()` includes a DSB (Data Synchronization Barrier) that stalls the CPU pipeline until the PCIe non-posted read completes — guaranteeing all prior posted writes from the same requester have been delivered. After `readl()` returns, TSTART is guaranteed to have reached RP1 and the CPU cannot speculatively race ahead into the next TX path.
 
 ```c
 macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
-(void)macb_readl(bp, NCR);  /* flush posted write over PCIe */
+(void)readl(bp->regs + MACB_NCR);  /* DSB + PCIe non-posted read → fence TSTART to RP1 */
 ```
 
 This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_restart()` (NAPI retry path). See [`patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch`](patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch).
@@ -31,7 +31,7 @@ This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_re
 
 **Why modules too?** `CONFIG_MODULE_SIG_FORCE=y` — Talos rejects any module whose signature doesn't match the key baked into vmlinuz. Each kernel build auto-generates a unique signing key. If we only swap vmlinuz, stock modules (signed by Sidero's key) fail to verify. Critically, `irq-bcm2712-mip.ko` (`CONFIG_BCM2712_MIP=m`) is the MSI-X interrupt controller for BCM2712/RP1. Without it, RP1 probe fails → no macb ethernet → no network. The patched imager Dockerfile extracts `rootfs.sqsh` from the stock initramfs, replaces the kernel modules with properly-signed copies from our kernel build, and repacks everything.
 
-**Why `macb_readl()` not `readl()`?** The heavier `readl()` call adds an arm64 DSB barrier instruction. When the kernel is compiled with Clang ThinLTO (as Talos does), this DSB in a hot TX path caused unexpected binary layout changes that broke RP1 PCIe MSI-X vector allocation at probe time. `macb_readl()` uses `readl_relaxed()`, which still issues a real PCIe non-posted read transaction (sufficient to flush all prior posted writes per PCIe spec) without the DSB. This matches the approach used by the Raspberry Pi downstream kernel ([`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1)).
+**Why `readl()` not `macb_readl()`?** `macb_readl()` uses `readl_relaxed()`, which issues a PCIe non-posted read but does NOT include a CPU barrier — the CPU can speculatively re-enter the TX path before the read completes. `readl()` adds an arm64 DSB (Data Synchronization Barrier) that stalls the pipeline until the PCIe round-trip finishes. Under sustained TX load on RP1's PCIe link, this close-the-window guarantee matters. The Raspberry Pi downstream kernel ([`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1)) uses a pre-write TSR read to flush posted writes; our patch uses a post-write NCR readback with full CPU synchronization, covering both TX start paths.
 
 Tracked at: [siderolabs/sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82)
 
