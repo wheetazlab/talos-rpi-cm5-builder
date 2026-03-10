@@ -17,23 +17,36 @@ name: Build Patched Imager (macb RP1 PCIe fix)
 # LTO-induced binary layout changes that broke RP1 MSI-X probe on earlier attempt.
 # See: patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch
 #
-# Why CONFIG_MACB=y matters
-# ─────────────────────────
-# macb is compiled *into* vmlinuz (not a loadable .ko module). This means:
-#   • No module-signing gymnastics (MODULE_SIG_FORCE=y would block a rebuilt .ko)
-#   • No Module.symvers CRC matching needed
-#   • Replacing vmlinuz is the ONLY change required in the Talos image stack
+# Why we must also replace modules (MODULE_SIG_FORCE)
+# ────────────────────────────────────────────────────
+# Each kernel build auto-generates a unique signing key.
+# CONFIG_MODULE_SIG_FORCE=y means the kernel rejects any module whose
+# signature doesn't match the key baked into vmlinuz.  If we only swap
+# vmlinuz, the stock modules (signed by Sidero's build key) fail to load.
+# Critically, irq-bcm2712-mip.ko (CONFIG_BCM2712_MIP=m) is the MSI-X
+# interrupt controller for BCM2712/RP1.  Without it: rpi_pci can't allocate
+# MSI-X vectors → RP1 probe fails → no macb ethernet → no network.
+#
+# Talos initramfs layout
+# ──────────────────────
+# initramfs.xz is a zstd-compressed cpio containing:
+#   ./init        — Talos init binary
+#   ./rootfs.sqsh — zstd-compressed squashfs of the full rootfs
+# Modules live inside rootfs.sqsh at /usr/lib/modules/<version>/.
 #
 # What this workflow does (no fork needed)
 # ────────────────────────────────────────
 # 1. Clone siderolabs/pkgs at the release branch (ephemeral, thrown away).
 # 2. Copy our kernel patch into kernel/build/patches/.
 # 3. Run `docker buildx build --target=kernel` on the pkgs Pkgfile.
-#    bldr (siderolabs' custom BuildKit frontend) downloads Linux 6.18.9, applies
-#    all patches (including ours), and compiles vmlinuz. Takes ~40–90 min.
+#    bldr downloads Linux 6.18.9, applies all patches (including ours),
+#    and compiles vmlinuz + kernel modules.  Takes ~40–90 min.
 # 4. Push the patched kernel OCI to our GHCR namespace.
-# 5. Build docker/patched-imager.Dockerfile:
-#    FROM official imager + COPY patched vmlinuz → push as our patched imager.
+# 5. Build docker/patched-imager.Dockerfile which:
+#    a. Extracts rootfs.sqsh from the stock initramfs
+#    b. Replaces signed modules with our patched (properly-signed) copies
+#    c. Repacks rootfs.sqsh → cpio → zstd → initramfs.xz
+#    d. Copies both patched vmlinuz and repacked initramfs into the imager
 #
 # After this workflow completes (step summary shows the image tag), trigger
 # "Build and Publish Talos CM5 Image" and fill in:
@@ -135,8 +148,10 @@ jobs:
             /tmp/pkgs
 
       # ── Assemble patched imager ─────────────────────────────────────────────
-      # Take the official Talos imager and replace ONLY usr/install/arm64/vmlinuz.
-      # The amd64 vmlinuz, initramfs.xz, systemd-boot, and Go binary are unchanged.
+      # Take the official Talos imager and replace arm64 vmlinuz + initramfs.xz.
+      # The Dockerfile extracts the stock initramfs, swaps module .ko files with
+      # our patched copies (matching signing key), repacks squashfs → cpio → zstd.
+      # The amd64 paths, systemd-boot, and Go binary are unchanged.
       - name: Build & push patched imager
         run: |
           docker buildx build \
@@ -165,8 +180,8 @@ jobs:
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
 
           The patched imager will be used for:
-          - `make build` → disk image (`metal-arm64.raw.xz`) with patched vmlinuz
-          - `make installer` → CM5 upgrade installer OCI with patched vmlinuz
+          - `make build` → disk image (`metal-arm64.raw.xz`) with patched vmlinuz + modules
+          - `make installer` → CM5 upgrade installer OCI with patched vmlinuz + modules
 
           No re-run is needed after each Talos point release unless the kernel version changes.
 

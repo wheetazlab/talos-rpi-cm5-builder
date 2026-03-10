@@ -27,7 +27,9 @@ macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
 
 This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_restart()` (NAPI retry path). See [`patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch`](patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch).
 
-**Why a custom kernel?** `CONFIG_MACB=y` — macb is compiled directly into `vmlinuz`, not a loadable module. There is no `macb.ko` to replace. The only fix is rebuilding `vmlinuz`, which is what the patched imager workflow does.
+**Why a custom kernel?** `CONFIG_MACB=y` — macb is compiled directly into `vmlinuz`, not a loadable module. There is no `macb.ko` to replace. The only fix is rebuilding `vmlinuz` and the matching kernel modules, which is what the patched imager workflow does.
+
+**Why modules too?** `CONFIG_MODULE_SIG_FORCE=y` — Talos rejects any module whose signature doesn't match the key baked into vmlinuz. Each kernel build auto-generates a unique signing key. If we only swap vmlinuz, stock modules (signed by Sidero's key) fail to verify. Critically, `irq-bcm2712-mip.ko` (`CONFIG_BCM2712_MIP=m`) is the MSI-X interrupt controller for BCM2712/RP1. Without it, RP1 probe fails → no macb ethernet → no network. The patched imager Dockerfile extracts `rootfs.sqsh` from the stock initramfs, replaces the kernel modules with properly-signed copies from our kernel build, and repacks everything.
 
 **Why `macb_readl()` not `readl()`?** The heavier `readl()` call adds an arm64 DSB barrier instruction. When the kernel is compiled with Clang ThinLTO (as Talos does), this DSB in a hot TX path caused unexpected binary layout changes that broke RP1 PCIe MSI-X vector allocation at probe time. `macb_readl()` uses `readl_relaxed()`, which still issues a real PCIe non-posted read transaction (sufficient to flush all prior posted writes per PCIe spec) without the DSB. This matches the approach used by the Raspberry Pi downstream kernel ([`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1)).
 
@@ -94,9 +96,9 @@ Both workflow files use `github.repository_owner` for all GHCR paths — they ar
 **What it does (no fork needed):**
 1. Clones `siderolabs/pkgs` at the matching release branch (ephemeral, thrown away after the run)
 2. Copies `patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch` into the pkgs kernel patch directory
-3. Runs `docker buildx build --target=kernel` via `siderolabs/bldr` — downloads Linux source, applies all upstream patches plus ours, compiles `vmlinuz` (~40–90 min on a 4-core arm64 runner)
+3. Runs `docker buildx build --target=kernel` via `siderolabs/bldr` — downloads Linux source, applies all upstream patches plus ours, compiles `vmlinuz` + kernel modules (~40–90 min on a 4-core arm64 runner)
 4. Pushes the patched kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-macb-fix`
-5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager and replaces only `usr/install/arm64/vmlinuz` with the patched one
+5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager, replaces `vmlinuz` and repacks `initramfs.xz` with properly-signed kernel modules
 6. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix`
 7. Writes a job summary with the exact `custom_imager` tag to copy into the next step
 
@@ -256,7 +258,7 @@ make help           Show all targets and version variables
 
 ## What's in the image?
 
-- Talos Linux kernel + initramfs (arm64) — **patched vmlinuz** with macb RP1 PCIe TSTART flush fix
+- Talos Linux kernel + initramfs (arm64) — **patched vmlinuz + modules** with macb RP1 PCIe TSTART flush fix
 - **Patched U-Boot** (`v2026.04-rc1`) with BCM2712 PCIe driver — enables NVMe boot on CM5
 - DTBs from `sbc-raspberrypi v0.2.0`:
   - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)
