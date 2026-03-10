@@ -4,7 +4,7 @@
 
 Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM5** on CM4IO-compatible carrier boards (e.g. DeskPi Super6C).
 
-Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards). Also ships a patched kernel that fixes intermittent TX stalls in the `macb` Ethernet driver caused by PCIe posted-write ordering on the RP1 southbridge.
+Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards). Also ships a patched kernel that fixes intermittent TX stalls in the `macb` Ethernet driver caused by PCIe posted-write ordering and TSTART elision on the RP1 southbridge.
 
 ## Background
 
@@ -16,22 +16,34 @@ Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/is
 
 ### macb Ethernet TX stall fix (kernel patch)
 
-Talos 1.12.x ships kernel 6.18.x. On CM5, the `macb` Ethernet driver (Cadence GEM) sits behind the RP1 southbridge over PCIe. PCIe uses **posted writes** for MMIO — the CPU fires the write and continues without confirmation. Under load, the write of `NCR |= TSTART` (transmit start) can be silently dropped by RP1, leaving the TX ring permanently stalled with **no kernel error, no watchdog timeout, and PHY link staying UP**. The node becomes unreachable on the network while still responding to ping from the local side and appearing healthy from the kernel's perspective.
+Talos 1.12.x ships kernel 6.18.x. On CM5, the `macb` Ethernet driver (Cadence GEM) sits behind the RP1 southbridge over PCIe. Two distinct failure modes cause TX stalls under sustained load:
 
-The fix is a **PCIe read-after-write barrier**: immediately after each TSTART write, read NCR back via `readl()` (non-relaxed). On arm64, `readl()` includes a DSB (Data Synchronization Barrier) that stalls the CPU pipeline until the PCIe non-posted read completes — guaranteeing all prior posted writes from the same requester have been delivered. After `readl()` returns, TSTART is guaranteed to have reached RP1 and the CPU cannot speculatively race ahead into the next TX path.
+1. **Posted TSTART writes dropped over PCIe.** PCIe uses posted writes for MMIO — the CPU fires the write and continues without confirmation. Under load, the write of `NCR |= TSTART` can be silently lost, leaving the TX ring stalled with **no kernel error, no watchdog timeout, and PHY link staying UP**.
+
+2. **Hardware ignores TSTART when TX is already active.** When the TGO (Transmit Go) bit is set in the TSR register, the GEM hardware may discard a new TSTART assertion. Queued descriptors are never transmitted.
+
+The patch applies two complementary fixes:
+
+**PCIe read-after-write fence** — immediately after each TSTART write, read NCR back via `readl()` (non-relaxed). On arm64, `readl()` includes a DSB that stalls the CPU until the PCIe non-posted read completes, guaranteeing TSTART has reached RP1. Applied in both `macb_start_xmit()` and `macb_tx_restart()`.
+
+**tx_pending retry** (from RPi downstream [`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1) by Jonathan Bell) — before writing TSTART in `macb_start_xmit()`, check if TGO is already set. If so, set `queue->tx_pending = 1`. In the interrupt handler, check `tx_pending` alongside TXUBR and flag `txubr_pending` so the NAPI TX poll calls `macb_tx_restart()` to retry.
 
 ```c
+/* Fix 2: Flag if hardware may ignore TSTART (TGO already set) */
+if (macb_readl(bp, TSR) & MACB_BIT(TGO))
+    queue->tx_pending = 1;
 macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
-(void)readl(bp->regs + MACB_NCR);  /* DSB + PCIe non-posted read → fence TSTART to RP1 */
+/* Fix 1: DSB + PCIe non-posted read → fence TSTART to RP1 */
+(void)readl(bp->regs + MACB_NCR);
 ```
 
-This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_restart()` (NAPI retry path). See [`patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch`](patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch).
+The patch modifies both `macb.h` (adds `tx_pending` field to `struct macb_queue`) and `macb_main.c` (three functions). See [`patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch`](patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch).
 
 **Why a custom kernel?** `CONFIG_MACB=y` — macb is compiled directly into `vmlinuz`, not a loadable module. There is no `macb.ko` to replace. The only fix is rebuilding `vmlinuz` and the matching kernel modules, which is what the patched imager workflow does.
 
 **Why modules too?** `CONFIG_MODULE_SIG_FORCE=y` — Talos rejects any module whose signature doesn't match the key baked into vmlinuz. Each kernel build auto-generates a unique signing key. If we only swap vmlinuz, stock modules (signed by Sidero's key) fail to verify. Critically, `irq-bcm2712-mip.ko` (`CONFIG_BCM2712_MIP=m`) is the MSI-X interrupt controller for BCM2712/RP1. Without it, RP1 probe fails → no macb ethernet → no network. The patched imager Dockerfile extracts `rootfs.sqsh` from the stock initramfs, replaces the kernel modules with properly-signed copies from our kernel build, and repacks everything.
 
-**Why `readl()` not `macb_readl()`?** `macb_readl()` uses `readl_relaxed()`, which issues a PCIe non-posted read but does NOT include a CPU barrier — the CPU can speculatively re-enter the TX path before the read completes. `readl()` adds an arm64 DSB (Data Synchronization Barrier) that stalls the pipeline until the PCIe round-trip finishes. Under sustained TX load on RP1's PCIe link, this close-the-window guarantee matters. The Raspberry Pi downstream kernel ([`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1)) uses a pre-write TSR read to flush posted writes; our patch uses a post-write NCR readback with full CPU synchronization, covering both TX start paths.
+**Why `readl()` not `macb_readl()`?** `macb_readl()` uses `readl_relaxed()`, which issues a PCIe non-posted read but does NOT include a CPU barrier — the CPU can speculatively re-enter the TX path before the read completes. `readl()` adds an arm64 DSB that stalls the pipeline until the PCIe round-trip finishes.
 
 Tracked at: [siderolabs/sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82)
 
