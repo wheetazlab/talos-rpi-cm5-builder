@@ -1,56 +1,30 @@
-name: Build Patched Imager (macb RP1 PCIe fix)
+name: Build RPi Kernel Imager (rpi-6.18.y)
 # ─────────────────────────────────────────────────────────────────────────────
-# Problem
-# ───────
-# Talos ≥ 1.12 ships kernel 6.18.x. On Raspberry Pi CM5, macb (the onboard
-# Ethernet driver in RP1) issues a PCIe *posted write* to the TSTART register.
-# On RP1, posted writes through the PCIe bridge can be silently dropped, leaving
-# the TX ring stalled indefinitely — no kernel log, PHY stays UP, just no Tx.
+# Why the RPi Foundation kernel?
+# ──────────────────────────────
+# The Raspberry Pi Foundation's rpi-6.18.y branch carries both macb PCIe TX
+# stall fixes natively (commits e45c98d and 316d9fe71fb1), plus hardware-
+# specific driver backports and optimizations for BCM2712/RP1.  This
+# eliminates the need for our custom macb patch against mainline.
 #
-# Fix
-# ───
-# Add `(void)macb_readl(bp, NCR)` after each TSTART write (PCIe read-after-write
-# flush). macb_readl() uses readl_relaxed(), which still issues a PCIe non-posted
-# read. Per PCIe ordering rules, that read cannot complete until all prior posted
-# writes from this requester have been delivered — fencing the TSTART write to RP1.
-# Using macb_readl() rather than the heavier readl() (which adds a DSB) avoids
-# LTO-induced binary layout changes that broke RP1 MSI-X probe on earlier attempt.
-# See: patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch
-#
-# Why we must also replace modules (MODULE_SIG_FORCE)
-# ────────────────────────────────────────────────────
-# Each kernel build auto-generates a unique signing key.
-# CONFIG_MODULE_SIG_FORCE=y means the kernel rejects any module whose
-# signature doesn't match the key baked into vmlinuz.  If we only swap
-# vmlinuz, the stock modules (signed by Sidero's build key) fail to load.
-# Critically, irq-bcm2712-mip.ko (CONFIG_BCM2712_MIP=m) is the MSI-X
-# interrupt controller for BCM2712/RP1.  Without it: rpi_pci can't allocate
-# MSI-X vectors → RP1 probe fails → no macb ethernet → no network.
-#
-# Talos initramfs layout
+# What this workflow does
 # ──────────────────────
-# initramfs.xz is a zstd-compressed cpio containing:
-#   ./init        — Talos init binary
-#   ./rootfs.sqsh — zstd-compressed squashfs of the full rootfs
-# Modules live inside rootfs.sqsh at /usr/lib/modules/<version>/.
-#
-# What this workflow does (no fork needed)
-# ────────────────────────────────────────
-# 1. Clone siderolabs/pkgs at the release branch (ephemeral, thrown away).
-# 2. Copy our kernel patch into kernel/build/patches/.
-# 3. Run `docker buildx build --target=kernel` on the pkgs Pkgfile.
-#    bldr downloads Linux 6.18.9, applies all patches (including ours),
-#    and compiles vmlinuz + kernel modules.  Takes ~40–90 min.
-# 4. Push the patched kernel OCI to our GHCR namespace.
-# 5. Build docker/patched-imager.Dockerfile which:
-#    a. Extracts rootfs.sqsh from the stock initramfs
-#    b. Replaces signed modules with our patched (properly-signed) copies
+# 1. Build the RPi kernel using docker/build-rpi-kernel.Dockerfile:
+#    a. Clones raspberrypi/linux at RPI_KERNEL_REF (branch or commit SHA)
+#    b. Uses bcm2712_defconfig + kernel/talos-config-fragment
+#       (adds IMA, MODULE_SIG_FORCE, KEXEC, bridge netfilter, 4K pages, NVMe=y)
+#    c. Compiles vmlinuz + kernel modules (arm64)
+#    d. Generates unique MODULE_SIG signing key
+# 2. Push the kernel OCI to GHCR.
+# 3. Build docker/patched-imager.Dockerfile which:
+#    a. Extracts rootfs.sqsh from the stock Talos initramfs
+#    b. Replaces kernel modules with our RPi build (properly-signed copies)
 #    c. Repacks rootfs.sqsh → cpio → zstd → initramfs.xz
-#    d. Copies both patched vmlinuz and repacked initramfs into the imager
+#    d. Copies both RPi vmlinuz and repacked initramfs into the imager
+# 4. Push the patched imager OCI to GHCR.
 #
 # After this workflow completes (step summary shows the image tag), trigger
-# "Build and Publish Talos CM5 Image" and fill in:
-#   custom_imager: ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:<ver>-macb-fix
+# "Build and Publish Talos CM5 Image" — it picks up the imager automatically.
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -60,24 +34,24 @@ on:
         description: 'Talos version to patch — must match TALOS_VERSION in Makefile'
         required: false
         default: 'v1.12.4'
-      pkgs_ref:
-        description: 'siderolabs/pkgs commit/branch to build from — must match the exact pkgs commit used for the target Talos release (v1.12.4 → b1fc4c6)'
+      rpi_kernel_ref:
+        description: 'raspberrypi/linux git ref (branch, tag, or SHA). Use branch name for latest, or pin to a SHA for reproducibility.'
         required: false
-        default: 'b1fc4c6'
+        default: 'rpi-6.18.y'
 
 jobs:
   build:
-    name: Build kernel + assemble patched imager
+    name: Build RPi kernel + assemble patched imager
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 180   # kernel compile can take ~90 min on a 4-core arm runner
+    timeout-minutes: 180
     permissions:
       packages: write
       contents: read
 
     env:
-      TALOS_VERSION: ${{ github.event.inputs.talos_version || 'v1.12.4' }}
-      PKGS_REF:      ${{ github.event.inputs.pkgs_ref || 'b1fc4c6' }}
-      IMAGE_PREFIX:  ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder
+      TALOS_VERSION:  ${{ github.event.inputs.talos_version || 'v1.12.4' }}
+      RPI_KERNEL_REF: ${{ github.event.inputs.rpi_kernel_ref || 'rpi-6.18.y' }}
+      IMAGE_PREFIX:   ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder
 
     steps:
       # ── Checkout ────────────────────────────────────────────────────────────
@@ -100,58 +74,27 @@ jobs:
         id: tags
         run: |
           VER=$(echo "${{ env.TALOS_VERSION }}" | tr -d 'v')
-          KERNEL_TAG="${{ env.IMAGE_PREFIX }}/kernel:${VER}-macb-fix"
-          IMAGER_TAG="${{ env.IMAGE_PREFIX }}/imager:${VER}-macb-fix"
+          KERNEL_TAG="${{ env.IMAGE_PREFIX }}/kernel:${VER}-rpi-kernel"
+          IMAGER_TAG="${{ env.IMAGE_PREFIX }}/imager:${VER}-rpi-kernel"
           echo "kernel=${KERNEL_TAG}" >> "$GITHUB_OUTPUT"
           echo "imager=${IMAGER_TAG}" >> "$GITHUB_OUTPUT"
           echo "Kernel image : ${KERNEL_TAG}"
           echo "Imager image : ${IMAGER_TAG}"
 
-      # ── Clone & patch pkgs ──────────────────────────────────────────────────
-      # GitHub does not support `git fetch <sha>` for arbitrary commits.
-      # Use the archive API instead — works for any SHA, tag, or branch ref.
-      - name: Download siderolabs/pkgs @ ${{ env.PKGS_REF }}
+      # ── Build RPi kernel ────────────────────────────────────────────────────
+      - name: Build RPi kernel from ${{ env.RPI_KERNEL_REF }} (~40–90 min)
         run: |
-          mkdir -p /tmp/pkgs
-          curl -fsSL "https://github.com/siderolabs/pkgs/archive/${{ env.PKGS_REF }}.tar.gz" \
-            | tar -xz --strip-components=1 -C /tmp/pkgs
-          echo "pkgs extracted at ref: ${{ env.PKGS_REF }}"
-
-      - name: Apply macb patch to pkgs
-        run: |
-          cp patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch \
-             /tmp/pkgs/kernel/build/patches/
-          echo "kernel/build/patches/ now contains:"
-          ls -1 /tmp/pkgs/kernel/build/patches/
-
-      # ── Build kernel ────────────────────────────────────────────────────────
-      # The pkgs Pkgfile uses siderolabs/bldr as a BuildKit custom frontend.
-      # BuildKit fetches the bldr image automatically from GHCR (already authenticated).
-      # SOURCE_DATE_EPOCH is required by bldr for reproducible builds.
-      # Since pkgs was downloaded as a tarball (no .git dir), fetch the commit
-      # timestamp via the GitHub commits API (jq + date parse).
-      - name: Build patched kernel package (~40–90 min)
-        run: |
-          EPOCH=$(curl -fsSL \
-            "https://api.github.com/repos/siderolabs/pkgs/commits/${{ env.PKGS_REF }}" \
-            | jq -r '.commit.committer.date' \
-            | xargs -I{} date -d {} +%s)
-          echo "SOURCE_DATE_EPOCH=${EPOCH}"
           docker buildx build \
-            --file=/tmp/pkgs/Pkgfile \
+            --file=docker/build-rpi-kernel.Dockerfile \
             --platform=linux/arm64 \
             --provenance=false \
             --target=kernel \
             --tag="${{ steps.tags.outputs.kernel }}" \
             --push \
-            --build-arg="SOURCE_DATE_EPOCH=${EPOCH}" \
-            /tmp/pkgs
+            --build-arg="RPI_KERNEL_REF=${{ env.RPI_KERNEL_REF }}" \
+            .
 
       # ── Assemble patched imager ─────────────────────────────────────────────
-      # Take the official Talos imager and replace arm64 vmlinuz + initramfs.xz.
-      # The Dockerfile extracts the stock initramfs, swaps module .ko files with
-      # our patched copies (matching signing key), repacks squashfs → cpio → zstd.
-      # The amd64 paths, systemd-boot, and Go binary are unchanged.
       - name: Build & push patched imager
         run: |
           docker buildx build \
@@ -169,7 +112,7 @@ jobs:
         if: always()
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
-          ## Patched imager ✅
+          ## RPi kernel imager ✅
 
           Set `custom_imager` when triggering **Build and Publish Talos CM5 Image**:
 
@@ -177,18 +120,24 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "custom_imager: ${{ steps.tags.outputs.imager }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
+
+          | Detail | Value |
+          |--------|-------|
+          | Kernel source | \`raspberrypi/linux@${{ env.RPI_KERNEL_REF }}\` |
+          | Base config | \`bcm2712_defconfig\` + \`kernel/talos-config-fragment\` |
+          | Base imager | \`ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}\` |
 
           The patched imager will be used for:
-          - `make build` → disk image (`metal-arm64.raw.xz`) with patched vmlinuz + modules
-          - `make installer` → CM5 upgrade installer OCI with patched vmlinuz + modules
+          - \`make build\` → disk image (\`metal-arm64.raw.xz\`) with RPi kernel
+          - \`make installer\` → CM5 upgrade installer OCI with RPi kernel
 
           No re-run is needed after each Talos point release unless the kernel version changes.
 
           <details>
           <summary>Intermediate kernel image (informational)</summary>
+
+          \`${{ steps.tags.outputs.kernel }}\`
+
+          </details>
           SUMMARY
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`${{ steps.tags.outputs.kernel }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "</details>" >> "$GITHUB_STEP_SUMMARY"

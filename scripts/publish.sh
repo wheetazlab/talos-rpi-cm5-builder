@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# publish.sh (patched flow) mirrors .github/workflows/publish.yml
+# publish.sh (RPi kernel flow) mirrors .github/workflows/publish.yml
 # - builds both variants (lite, emmc)
-# - uses patched imager
-# - pushes installers tagged <talos>-macb-fix-<variant>
-# - creates release tag <talos>-macb-fix with two disk images
+# - uses RPi kernel imager
+# - pushes installers tagged <talos>-rpi-kernel-<variant>
+# - creates release tag <talos>-rpi-kernel with two disk images
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -14,7 +14,7 @@ TALOS_VERSION="${TALOS_VERSION:-v1.12.4}"
 DOCKER="${DOCKER:-podman}"
 GHCR_ORG="${GHCR_ORG:-wheetazlab}"
 GH_REPO="${GH_REPO:-${GHCR_ORG}/talos-rpi-cm5-builder}"
-PATCH_SUFFIX="${PATCH_SUFFIX:-macb-fix}"
+PATCH_SUFFIX="${PATCH_SUFFIX:-rpi-kernel}"
 PATCHED_RELEASE_TAG="${PATCHED_RELEASE_TAG:-${TALOS_VERSION}-${PATCH_SUFFIX}}"
 ARCH="${ARCH:-arm64}"
 
@@ -102,7 +102,7 @@ This is a patched Talos build for the Raspberry Pi CM5.
 | Imager | \`${PATCHED_IMAGER_TAG}\` |
 | Installer base | \`ghcr.io/siderolabs/installer-base:${TALOS_VERSION}\` |
 | Talos | \`${TALOS_VERSION}\` |
-| Kernel | Linux ${LINUX_KERNEL_VERSION} — \`siderolabs/pkgs@${PKGS_REF}\` — patched: macb RP1 PCIe TSTART flush |
+| Kernel | RPi Foundation \`raspberrypi/linux\` (rpi-6.18.y) — \`bcm2712_defconfig\` + Talos config fragment |
 | U-Boot | \`${UBOOT_VER}\` — patched: BCM2712 NVMe/PCIe |
 | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${SBC_VERSION}\` |
 | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION}\` |

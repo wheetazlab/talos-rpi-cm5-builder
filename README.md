@@ -4,7 +4,7 @@
 
 Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM5** on CM4IO-compatible carrier boards (e.g. DeskPi Super6C).
 
-Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards). Also ships a patched kernel that fixes intermittent TX stalls in the `macb` Ethernet driver caused by PCIe posted-write ordering on the RP1 southbridge.
+Uses the **Raspberry Pi Foundation's kernel** (`rpi-6.18.y`) instead of the stock Talos mainline kernel, providing native hardware support and macb Ethernet fixes for BCM2712/RP1. Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards).
 
 ## Background
 
@@ -14,24 +14,24 @@ NVMe boot support is provided by a patched U-Boot (`v2026.04-rc1`) with BCM2712 
 
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
 
-### macb Ethernet TX stall fix (kernel patch)
+### RPi Foundation kernel (rpi-6.18.y)
 
-Talos 1.12.x ships kernel 6.18.x. On CM5, the `macb` Ethernet driver (Cadence GEM) sits behind the RP1 southbridge over PCIe. PCIe uses **posted writes** for MMIO — the CPU fires the write and continues without confirmation. Under load, the write of `NCR |= TSTART` (transmit start) can be silently dropped by RP1, leaving the TX ring permanently stalled with **no kernel error, no watchdog timeout, and PHY link staying UP**. The node becomes unreachable on the network while still responding to ping from the local side and appearing healthy from the kernel's perspective.
+Instead of the stock Talos kernel (siderolabs/pkgs mainline 6.18.x), this repo builds from the **Raspberry Pi Foundation's `rpi-6.18.y`** kernel branch. This provides:
 
-The fix is a **PCIe read-after-write barrier**: immediately after each TSTART write, read NCR back via `readl()` (non-relaxed). On arm64, `readl()` includes a DSB (Data Synchronization Barrier) that stalls the CPU pipeline until the PCIe non-posted read completes — guaranteeing all prior posted writes from the same requester have been delivered. After `readl()` returns, TSTART is guaranteed to have reached RP1 and the CPU cannot speculatively race ahead into the next TX path.
+- **Native macb PCIe TX stall fixes** — both [`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1) (TSR-before-TSTART flush) and [`316d9fe71fb1`](https://github.com/raspberrypi/linux/commit/316d9fe71fb1) (ring reinit on phy link up) are included, eliminating the need for a custom macb patch
+- **BCM2712/RP1 hardware optimizations** — driver backports and tuning specific to the CM5 SoC that aren't in mainline
+- **RPi-specific driver support** — RP1 southbridge, BCM2712 interrupt controller, and other hardware features carried by the RPi Foundation
 
-```c
-macb_writel(bp, NCR, macb_readl(bp, NCR) | MACB_BIT(TSTART));
-(void)readl(bp->regs + MACB_NCR);  /* DSB + PCIe non-posted read → fence TSTART to RP1 */
-```
+The kernel is built using `bcm2712_defconfig` supplemented with a [Talos config fragment](kernel/talos-config-fragment) that adds:
+- **IMA** (Integrity Measurement Architecture) for runtime integrity verification
+- **MODULE_SIG_FORCE** to enforce kernel module signature checking
+- **KEXEC** support for in-place Talos upgrades
+- **Bridge netfilter** modules for Kubernetes CNI
+- **4K page size** (overriding bcm2712_defconfig's 16K default for container compatibility)
+- **NVMe as built-in** (not module) for NVMe root boot
+- **IPVS** for kube-proxy
 
-This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_restart()` (NAPI retry path). See [`patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch`](patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch).
-
-**Why a custom kernel?** `CONFIG_MACB=y` — macb is compiled directly into `vmlinuz`, not a loadable module. There is no `macb.ko` to replace. The only fix is rebuilding `vmlinuz` and the matching kernel modules, which is what the patched imager workflow does.
-
-**Why modules too?** `CONFIG_MODULE_SIG_FORCE=y` — Talos rejects any module whose signature doesn't match the key baked into vmlinuz. Each kernel build auto-generates a unique signing key. If we only swap vmlinuz, stock modules (signed by Sidero's key) fail to verify. Critically, `irq-bcm2712-mip.ko` (`CONFIG_BCM2712_MIP=m`) is the MSI-X interrupt controller for BCM2712/RP1. Without it, RP1 probe fails → no macb ethernet → no network. The patched imager Dockerfile extracts `rootfs.sqsh` from the stock initramfs, replaces the kernel modules with properly-signed copies from our kernel build, and repacks everything.
-
-**Why `readl()` not `macb_readl()`?** `macb_readl()` uses `readl_relaxed()`, which issues a PCIe non-posted read but does NOT include a CPU barrier — the CPU can speculatively re-enter the TX path before the read completes. `readl()` adds an arm64 DSB (Data Synchronization Barrier) that stalls the pipeline until the PCIe round-trip finishes. Under sustained TX load on RP1's PCIe link, this close-the-window guarantee matters. The Raspberry Pi downstream kernel ([`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1)) uses a pre-write TSR read to flush posted writes; our patch uses a post-write NCR readback with full CPU synchronization, covering both TX start paths.
+**Why we must replace modules too:** `CONFIG_MODULE_SIG_FORCE=y` — Talos rejects any module whose signature doesn't match the key baked into vmlinuz. Each kernel build auto-generates a unique signing key. If we only swap vmlinuz, stock modules (signed by Sidero's key) fail to verify. Critically, `irq-bcm2712-mip.ko` (`CONFIG_BCM2712_MIP=m`) is the MSI-X interrupt controller for BCM2712/RP1. Without it, RP1 probe fails → no macb ethernet → no network. The patched imager Dockerfile extracts `rootfs.sqsh` from the stock initramfs, replaces the entire kernel modules directory with properly-signed copies from our RPi kernel build, and repacks everything.
 
 Tracked at: [siderolabs/sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82)
 
@@ -69,13 +69,14 @@ Flash Raspberry Pi OS to an SD card, boot from it once (this automatically updat
 
 ## Versions
 
-| Component             | Version        |
-|-----------------------|----------------|
-| Talos Linux           | `v1.12.4`      |
-| sbc-raspberrypi       | `v0.2.0`       |
-| iscsi-tools extension | `v0.2.0`       |
-| util-linux-tools      | `2.41.2`       |
-| U-Boot                | `v2026.04-rc1` |
+| Component             | Version / Ref      |
+|-----------------------|--------------------|
+| Talos Linux           | `v1.12.4`          |
+| Kernel                | RPi `rpi-6.18.y`   |
+| sbc-raspberrypi       | `v0.2.0`           |
+| iscsi-tools extension | `v0.2.0`           |
+| util-linux-tools      | `2.41.2`           |
+| U-Boot                | `v2026.04-rc1`     |
 
 All versions are configurable — see [Customization](#customization).
 
@@ -87,20 +88,18 @@ Images are built automatically on GitHub Actions using a native **Ubuntu arm64**
 
 Both workflow files use `github.repository_owner` for all GHCR paths — they are fully portable. Forks automatically publish to the forker's own GHCR namespace.
 
-### Step 1 (prerequisite for patched kernel): Build Patched Imager (`build-patched-imager.yml`)
+### Step 1 (prerequisite for RPi kernel): Build RPi Kernel Imager (`build-patched-imager.yml`)
 
-**Run this first** — it rebuilds the kernel with the macb RP1 PCIe fix and produces a patched imager image. Only needs to run once per kernel version (i.e. once per Talos minor release). Skip this step if you only want a standard unpatched image.
+**Run this first** — it builds the RPi Foundation kernel and produces a patched imager image. Only needs to run once per kernel ref (i.e. once when you update the `rpi-6.18.y` branch pin).
 
-**Trigger:** Manual only — **Actions → Build Patched Imager (macb RP1 PCIe fix) → Run workflow**
+**Trigger:** Manual only — **Actions → Build RPi Kernel Imager (rpi-6.18.y) → Run workflow**
 
-**What it does (no fork needed):**
-1. Clones `siderolabs/pkgs` at the matching release branch (ephemeral, thrown away after the run)
-2. Copies `patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch` into the pkgs kernel patch directory
-3. Runs `docker buildx build --target=kernel` via `siderolabs/bldr` — downloads Linux source, applies all upstream patches plus ours, compiles `vmlinuz` + kernel modules (~40–90 min on a 4-core arm64 runner)
-4. Pushes the patched kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-macb-fix`
-5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager, replaces `vmlinuz` and repacks `initramfs.xz` with properly-signed kernel modules
-6. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix`
-7. Writes a job summary with the exact `custom_imager` tag to copy into the next step
+**What it does:**
+1. Builds `docker/build-rpi-kernel.Dockerfile` — clones `raspberrypi/linux` at `RPI_KERNEL_REF`, applies `bcm2712_defconfig` + `kernel/talos-config-fragment`, compiles vmlinuz + kernel modules (~40–90 min on a 4-core arm64 runner)
+2. Pushes the kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-rpi-kernel`
+3. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager, replaces `vmlinuz` and repacks `initramfs.xz` with properly-signed kernel modules from the RPi build
+4. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-rpi-kernel`
+5. Writes a job summary with the exact `custom_imager` tag to copy into the next step
 
 ### Step 2: Build and Publish (`publish.yml`)
 
@@ -120,17 +119,17 @@ The standard image build pipeline. Builds disk images and the upgrade installer 
    - Uploads `metal-arm64-lite.raw.xz` / `metal-arm64-emmc.raw.xz` as artifacts
 4. **`release`** — downloads both artifacts and creates the GitHub release with both images attached
 
-The patched imager tag is computed automatically from `github.repository_owner` and the resolved `TALOS_VERSION` — no manual input required. Step 2 always uses the patched kernel as long as step 1 has been run at least once for the current kernel version.
+The patched imager tag is computed automatically from `github.repository_owner` and the resolved `TALOS_VERSION` — no manual input required. Step 2 always uses the RPi kernel as long as step 1 has been run at least once for the target kernel ref.
 
-**Full sequence to publish a patched release:**
+**Full sequence to publish an RPi-kernel release:**
 ```
-Step 1 (once per kernel version):
-  Actions → Build Patched Imager → Run workflow
+Step 1 (once per kernel ref):
+  Actions → Build RPi Kernel Imager → Run workflow
   ↓ wait ~90 min
 
 Step 2 (every release):
   Actions → Build and Publish → Run workflow
-  ↓ automatically uses ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix
+  ↓ automatically uses ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-rpi-kernel
 ```
 
 > **⚠️ Required GitHub permissions (org repos only)**
@@ -258,7 +257,7 @@ make help           Show all targets and version variables
 
 ## What's in the image?
 
-- Talos Linux kernel + initramfs (arm64) — **patched vmlinuz + modules** with macb RP1 PCIe TSTART flush fix
+- Talos Linux kernel + initramfs (arm64) — **RPi Foundation kernel** (`rpi-6.18.y`, `bcm2712_defconfig` + Talos config fragment)
 - **Patched U-Boot** (`v2026.04-rc1`) with BCM2712 PCIe driver — enables NVMe boot on CM5
 - DTBs from `sbc-raspberrypi v0.2.0`:
   - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)
@@ -297,10 +296,10 @@ To upgrade an existing node, use the installer image matching your variant:
 
 ```bash
 # CM5 Lite
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-lite
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-rpi-kernel-lite
 
 # CM5 with eMMC
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-emmc
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-rpi-kernel-emmc
 ```
 
 ---
@@ -316,8 +315,13 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-inst
 - [Talos system extensions](https://www.talos.dev/v1.12/talos-guides/configuration/system-extensions/)
 - [DeskPi Super6C](https://deskpi.com/products/deskpi-super6c-raspberry-pi-cm4-6-boards-cluster-mini-itx-board) — example CM4IO-compatible carrier board
 
-**macb RP1 PCIe TX stall**
+**macb RP1 PCIe TX stall (fixed in rpi-6.18.y)**
 - [macb TX stall issue (sbc-raspberrypi#82)](https://github.com/siderolabs/sbc-raspberrypi/issues/82) — upstream tracking issue
-- [RPi downstream fix `359f37f`](https://github.com/raspberrypi/linux/commit/359f37f0faefb712add32a39f98751aea67d5c1f) — rpi-6.12.y (incompatible with 6.18 `tx_pending` semantics)
-- [Mainline fix `bf9cf80`](https://github.com/torvalds/linux/commit/bf9cf80) — net: macb: Fix tx/rx malfunction after phy link down/up (not yet in 6.18.x stable)
-- [Cadence GEM (macb) driver](https://elixir.bootlin.com/linux/v6.18.9/source/drivers/net/ethernet/cadence/macb_main.c) — `macb_start_xmit()` and `macb_tx_restart()` are the patched functions
+- [RPi downstream fix `e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1) — TSR-before-TSTART flush (rpi-6.12.y, also in rpi-6.18.y)
+- [RPi downstream fix `316d9fe71fb1`](https://github.com/raspberrypi/linux/commit/316d9fe71fb1) — ring reinit on phy link up (rpi-6.18.y)
+- [Mainline fix `bf9cf80`](https://github.com/torvalds/linux/commit/bf9cf80) — net: macb: Fix tx/rx malfunction after phy link down/up
+- [Cadence GEM (macb) driver](https://elixir.bootlin.com/linux/v6.18.9/source/drivers/net/ethernet/cadence/macb_main.c)
+
+**RPi kernel**
+- [raspberrypi/linux rpi-6.18.y branch](https://github.com/raspberrypi/linux/tree/rpi-6.18.y)
+- [bcm2712_defconfig](https://github.com/raspberrypi/linux/blob/rpi-6.18.y/arch/arm64/configs/bcm2712_defconfig)

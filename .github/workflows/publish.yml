@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       talos_version:
-        description: 'Base Talos version (e.g. v1.12.4). Patched release/installer tags will use <version>-macb-fix.'
+        description: 'Base Talos version (e.g. v1.12.4). RPi kernel release/installer tags will use <version>-rpi-kernel.'
         required: false
         default: ''
 
@@ -24,6 +24,7 @@ jobs:
       uboot_version: ${{ steps.version.outputs.uboot_version }}
       pkgs_ref: ${{ steps.version.outputs.pkgs_ref }}
       linux_kernel_version: ${{ steps.version.outputs.linux_kernel_version }}
+      rpi_kernel_ref: ${{ steps.version.outputs.rpi_kernel_ref }}
       iscsi_version: ${{ steps.version.outputs.iscsi_version }}
       util_version: ${{ steps.version.outputs.util_version }}
     steps:
@@ -41,9 +42,9 @@ jobs:
             VERSION=$(grep '^TALOS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "patched_release_tag=${VERSION}-macb-fix" >> "$GITHUB_OUTPUT"
+          echo "patched_release_tag=${VERSION}-rpi-kernel" >> "$GITHUB_OUTPUT"
           VER=$(echo "${VERSION}" | tr -d 'v')
-          echo "patched_imager_tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-macb-fix" >> "$GITHUB_OUTPUT"
+          echo "patched_imager_tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-rpi-kernel" >> "$GITHUB_OUTPUT"
 
           ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
@@ -51,11 +52,13 @@ jobs:
           UBOOT=$(grep '^UBOOT_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           PKGS=$(grep '^PKGS_REF' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           LINUX=$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
+          RPI_REF=$(grep '^RPI_KERNEL_REF' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           echo "extensions=ghcr.io/siderolabs/iscsi-tools:${ISCSI} ghcr.io/siderolabs/util-linux-tools:${UTIL}" >> "$GITHUB_OUTPUT"
           echo "sbc_version=${SBC}" >> "$GITHUB_OUTPUT"
           echo "uboot_version=${UBOOT}" >> "$GITHUB_OUTPUT"
           echo "pkgs_ref=${PKGS}" >> "$GITHUB_OUTPUT"
           echo "linux_kernel_version=${LINUX}" >> "$GITHUB_OUTPUT"
+          echo "rpi_kernel_ref=${RPI_REF}" >> "$GITHUB_OUTPUT"
           echo "iscsi_version=${ISCSI}" >> "$GITHUB_OUTPUT"
           echo "util_version=${UTIL}" >> "$GITHUB_OUTPUT"
 
@@ -115,7 +118,7 @@ jobs:
         id: imager
         run: |
           VER=$(echo "${{ env.TALOS_VERSION }}" | tr -d 'v')
-          echo "tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-macb-fix" >> "$GITHUB_OUTPUT"
+          echo "tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-rpi-kernel" >> "$GITHUB_OUTPUT"
 
       - name: Build Talos image
         run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }}
@@ -153,6 +156,7 @@ jobs:
       UBOOT_VERSION: ${{ needs.resolve-version.outputs.uboot_version }}
       PKGS_REF: ${{ needs.resolve-version.outputs.pkgs_ref }}
       LINUX_KERNEL_VERSION: ${{ needs.resolve-version.outputs.linux_kernel_version }}
+      RPI_KERNEL_REF: ${{ needs.resolve-version.outputs.rpi_kernel_ref }}
       ISCSI_VERSION: ${{ needs.resolve-version.outputs.iscsi_version }}
       UTIL_VERSION: ${{ needs.resolve-version.outputs.util_version }}
       REGISTRY: ghcr.io
@@ -173,7 +177,7 @@ jobs:
           NOTES=$(cat <<EOF
           > ⚠️ Experimental build, use at your own risk.
 
-          This is a patched Talos build for the Raspberry Pi CM5.
+          This is an RPi-kernel Talos build for the Raspberry Pi CM5.
 
           ### Components
 
@@ -182,7 +186,7 @@ jobs:
           | Imager | \`${{ env.PATCHED_IMAGER_TAG }}\` |
           | Installer base | \`ghcr.io/siderolabs/installer-base:${{ env.TALOS_VERSION }}\` |
           | Talos | \`${{ env.TALOS_VERSION }}\` |
-          | Kernel | Linux ${{ env.LINUX_KERNEL_VERSION }} — \`siderolabs/pkgs@${{ env.PKGS_REF }}\` — patched: macb RP1 PCIe TSTART flush |
+          | Kernel | RPi Foundation \`raspberrypi/linux\` (rpi-6.18.y) — \`bcm2712_defconfig\` + Talos config fragment |
           | U-Boot | \`${{ env.UBOOT_VERSION }}\` — patched: BCM2712 NVMe/PCIe |
           | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${{ env.SBC_VERSION }}\` |
           | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}\` |

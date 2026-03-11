@@ -9,6 +9,9 @@ SBC_RPI_VERSION      ?= v0.2.0
 ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.2
 UBOOT_VERSION        ?= v2026.04-rc1
+RPI_KERNEL_REF       ?= rpi-6.18.y
+# PKGS_REF and LINUX_KERNEL_VERSION are retained for the stock publish workflow
+# (release notes only — the stock flow uses the upstream Talos kernel, not ours).
 PKGS_REF             ?= b1fc4c6
 LINUX_KERNEL_VERSION ?= 6.18.9
 
@@ -49,16 +52,16 @@ GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 TAG             ?= $(TALOS_VERSION)
 GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 
-# --- Kernel patch overrides (macb RP1 PCIe TSTART fix) -----------------------
-# The macb driver in Talos ≥ 1.12 (kernel 6.18.x) silently drops PCIe posted
-# writes to the TSTART register on RP1, causing the TX ring to stall after a
-# while. The fix is a read-after-write flush baked into vmlinuz (CONFIG_MACB=y).
+# --- Custom kernel overrides (RPi Foundation kernel) --------------------------
+# The RPi Foundation's rpi-6.18.y kernel includes native macb PCIe TX stall
+# fixes for RP1, eliminating the need for our custom macb patch.  It also
+# carries BCM2712/RP1-specific optimizations not present in mainline.
 #
-# CI automatically sets CUSTOM_IMAGER to the patched imager tag built by the
-# build-patched-imager workflow. Run that workflow once per kernel version first.
+# CI automatically sets CUSTOM_IMAGER to the RPi kernel imager tag built by
+# the build-patched-imager workflow.  Run that workflow once per kernel ref.
 #
 # For local builds, override manually:
-#   make build CUSTOM_IMAGER=ghcr.io/<owner>/talos-rpi-cm5-builder/imager:1.12.4-macb-fix
+#   make build CUSTOM_IMAGER=ghcr.io/<owner>/talos-rpi-cm5-builder/imager:1.12.4-rpi-kernel
 #
 CUSTOM_IMAGER           ?=
 

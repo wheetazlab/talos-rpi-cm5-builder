@@ -1,6 +1,6 @@
 # check=skip=InvalidDefaultArgInFrom
-# Patched Talos imager — replaces arm64 vmlinuz AND kernel modules with our
-# patched kernel build (macb RP1 PCIe TSTART flush fix).
+# Patched Talos imager — replaces arm64 vmlinuz AND kernel modules with a
+# custom kernel build (RPi Foundation rpi-6.18.y or macb-patched mainline).
 #
 # Why modules must be replaced too
 # ─────────────────────────────────
@@ -25,9 +25,18 @@
 #   3. Repacks rootfs.sqsh → cpio → zstd → initramfs.xz
 #   4. Copies both the patched vmlinuz and repacked initramfs into the imager
 #
+# Module replacement modes
+# ────────────────────────
+# Same-version (e.g. macb-patched mainline 6.18.9 vs stock 6.18.9):
+#   Per-file swap — only replace .ko files that exist in the stock whitelist.
+# Different-version (e.g. RPi 6.18.y kernel vs stock 6.18.9):
+#   Full replacement — remove stock modules dir, install patched modules dir.
+#   The kernel and modules must always come from the same build since
+#   MODULE_SIG_FORCE requires matching signing keys.
+#
 # Build args:
 #   BASE_IMAGER   — official Talos imager, e.g. ghcr.io/siderolabs/imager:v1.12.4
-#   KERNEL_IMAGE  — patched kernel OCI, e.g. ghcr.io/.../kernel:1.12.4-macb-fix
+#   KERNEL_IMAGE  — custom kernel OCI, e.g. ghcr.io/.../kernel:1.12.4-rpi-kernel
 #
 # Built by .github/workflows/build-patched-imager.yml
 ARG BASE_IMAGER
@@ -57,25 +66,33 @@ RUN unsquashfs -no-xattrs -d /tmp/rootfs /tmp/initramfs/rootfs.sqsh
 # Bring in patched modules (signed with our kernel's key)
 COPY --from=patched-kernel /usr/lib/modules /tmp/patched-modules
 
-# Replace modules: iterate the stock whitelist, swap each .ko with our patched copy.
-# NOTE: do NOT put shell '#' comments inside a multi-line RUN block — Dockerfile
-# strips '\<newline>', so '#' in the joined string comments out everything after it.
+# Replace modules: auto-detect whether this is same-version or cross-version.
+# Same-version: per-file swap (preserves stock whitelist, minimal size).
+# Cross-version: full replacement (RPi kernel has different version string).
 RUN set -eu; \
     STOCK_VER=$(ls /tmp/rootfs/usr/lib/modules/); \
     PATCH_VER=$(ls /tmp/patched-modules/); \
     echo "Stock kernel modules: ${STOCK_VER}"; \
     echo "Patched kernel modules: ${PATCH_VER}"; \
-    find /tmp/rootfs/usr/lib/modules/"${STOCK_VER}" -name '*.ko' | while read -r stock_ko; do \
-        rel=${stock_ko#/tmp/rootfs/usr/lib/modules/"${STOCK_VER}"/}; \
-        patched_ko="/tmp/patched-modules/${PATCH_VER}/${rel}"; \
-        if [ -f "${patched_ko}" ]; then \
-            cp "${patched_ko}" "${stock_ko}"; \
-        else \
-            echo "WARNING: no patched equivalent for ${rel} — removing"; \
-            rm -f "${stock_ko}"; \
-        fi; \
-    done; \
-    depmod -b /tmp/rootfs "${STOCK_VER}"
+    if [ "${STOCK_VER}" = "${PATCH_VER}" ]; then \
+        echo "==> Same version — per-file module replacement"; \
+        find /tmp/rootfs/usr/lib/modules/"${STOCK_VER}" -name '*.ko' | while read -r stock_ko; do \
+            rel=${stock_ko#/tmp/rootfs/usr/lib/modules/"${STOCK_VER}"/}; \
+            patched_ko="/tmp/patched-modules/${PATCH_VER}/${rel}"; \
+            if [ -f "${patched_ko}" ]; then \
+                cp "${patched_ko}" "${stock_ko}"; \
+            else \
+                echo "WARNING: no patched equivalent for ${rel} — removing"; \
+                rm -f "${stock_ko}"; \
+            fi; \
+        done; \
+        depmod -b /tmp/rootfs "${STOCK_VER}"; \
+    else \
+        echo "==> Version mismatch — full module directory replacement"; \
+        rm -rf /tmp/rootfs/usr/lib/modules/"${STOCK_VER}"; \
+        cp -a /tmp/patched-modules/"${PATCH_VER}" /tmp/rootfs/usr/lib/modules/"${PATCH_VER}"; \
+        depmod -b /tmp/rootfs "${PATCH_VER}"; \
+    fi
 
 # Repack rootfs.sqsh
 RUN rm /tmp/initramfs/rootfs.sqsh && \

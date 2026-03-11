@@ -12,3 +12,4 @@ _out/
 *.swp
 *.swo
 *~
+.claude/
