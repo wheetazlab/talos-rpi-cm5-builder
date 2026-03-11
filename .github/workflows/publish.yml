@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       talos_version:
-        description: 'Base Talos version (e.g. v1.12.4). RPi kernel release/installer tags will use <version>-rpi-kernel.'
+        description: 'Base Talos version (e.g. v1.12.5). RPi kernel release/installer tags will use <version>-rpi-kernel.'
         required: false
         default: ''
 

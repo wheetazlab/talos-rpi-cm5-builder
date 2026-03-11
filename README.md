@@ -71,7 +71,7 @@ Flash Raspberry Pi OS to an SD card, boot from it once (this automatically updat
 
 | Component             | Version / Ref      |
 |-----------------------|--------------------|
-| Talos Linux           | `v1.12.4`          |
+| Talos Linux           | `v1.12.5`          |
 | Kernel                | RPi `rpi-6.18.y`   |
 | sbc-raspberrypi       | `v0.2.0`           |
 | iscsi-tools extension | `v0.2.0`           |
@@ -106,7 +106,7 @@ Both workflow files use `github.repository_owner` for all GHCR paths — they ar
 The standard image build pipeline. Builds disk images and the upgrade installer for both CM5 variants.
 
 **Triggers:**
-- Push a version tag (e.g. `git tag v1.12.4 && git push --tags`) → full build + publish
+- Push a version tag (e.g. `git tag v1.12.5 && git push --tags`) → full build + publish
 - Manual run via **Actions → Build and Publish → Run workflow** with optional version override
 
 **Pipeline jobs:**
@@ -212,13 +212,13 @@ make release      # GitHub release with .raw.xz artifact
 
 ```bash
 # Different Talos version
-make publish TALOS_VERSION=v1.12.4
+make publish TALOS_VERSION=v1.12.5
 
 # CM5 with onboard eMMC (disables sdhci_brcmstb blacklist)
 make publish CM5_VARIANT=emmc
 
 # Full override
-make publish TALOS_VERSION=v1.12.4 SBC_RPI_VERSION=v0.2.0 CM5_VARIANT=lite
+make publish TALOS_VERSION=v1.12.5 SBC_RPI_VERSION=v0.2.0 CM5_VARIANT=lite
 ```
 
 **`CM5_VARIANT`** controls a kernel arg applied at image build time (local builds only — CI always builds both):
@@ -296,10 +296,10 @@ To upgrade an existing node, use the installer image matching your variant:
 
 ```bash
 # CM5 Lite
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-rpi-kernel-lite
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.5-rpi-kernel-lite
 
 # CM5 with eMMC
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-rpi-kernel-emmc
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.5-rpi-kernel-emmc
 ```
 
 ---

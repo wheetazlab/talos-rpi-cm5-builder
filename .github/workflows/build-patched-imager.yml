@@ -33,7 +33,7 @@ on:
       talos_version:
         description: 'Talos version to patch — must match TALOS_VERSION in Makefile'
         required: false
-        default: 'v1.12.4'
+        default: 'v1.12.5'
       rpi_kernel_ref:
         description: 'raspberrypi/linux git ref (branch, tag, or SHA). Use branch name for latest, or pin to a SHA for reproducibility.'
         required: false
@@ -49,7 +49,7 @@ jobs:
       contents: read
 
     env:
-      TALOS_VERSION:  ${{ github.event.inputs.talos_version || 'v1.12.4' }}
+      TALOS_VERSION:  ${{ github.event.inputs.talos_version || 'v1.12.5' }}
       RPI_KERNEL_REF: ${{ github.event.inputs.rpi_kernel_ref || 'rpi-6.18.y' }}
       IMAGE_PREFIX:   ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder
 

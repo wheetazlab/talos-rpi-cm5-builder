@@ -4,7 +4,7 @@
 # ------------------------------------------------------------------------------
 
 # --- Versions ------------------------------------------------------------------
-TALOS_VERSION        ?= v1.12.4
+TALOS_VERSION        ?= v1.12.5
 SBC_RPI_VERSION      ?= v0.2.0
 ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.2
@@ -41,14 +41,14 @@ EXTRA_KERNEL_ARGS ?=
 # --- GHCR publish config -------------------------------------------------------
 GHCR_ORG        ?= wheetazlab
 GHCR_REPO       ?= talos-rpi-cm5-installer
-# INSTALLER_TAG lets CI override the destination image tag (e.g. v1.12.4-lite)
+# INSTALLER_TAG lets CI override the destination image tag (e.g. v1.12.5-lite)
 # without changing TALOS_VERSION which must match the upstream installer-base tag.
 INSTALLER_TAG   ?= $(TALOS_VERSION)
 GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 
 # --- Release config ------------------------------------------------------------
 # TAG is used for `make release` — override if you want a custom tag.
-# e.g. make release TAG=v1.12.4-1
+# e.g. make release TAG=v1.12.5-1
 TAG             ?= $(TALOS_VERSION)
 GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 
@@ -61,7 +61,7 @@ GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 # the build-patched-imager workflow.  Run that workflow once per kernel ref.
 #
 # For local builds, override manually:
-#   make build CUSTOM_IMAGER=ghcr.io/<owner>/talos-rpi-cm5-builder/imager:1.12.4-rpi-kernel
+#   make build CUSTOM_IMAGER=ghcr.io/<owner>/talos-rpi-cm5-builder/imager:1.12.5-rpi-kernel
 #
 CUSTOM_IMAGER           ?=
 

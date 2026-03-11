@@ -35,8 +35,8 @@
 #   MODULE_SIG_FORCE requires matching signing keys.
 #
 # Build args:
-#   BASE_IMAGER   — official Talos imager, e.g. ghcr.io/siderolabs/imager:v1.12.4
-#   KERNEL_IMAGE  — custom kernel OCI, e.g. ghcr.io/.../kernel:1.12.4-rpi-kernel
+#   BASE_IMAGER   — official Talos imager, e.g. ghcr.io/siderolabs/imager:v1.12.5
+#   KERNEL_IMAGE  — custom kernel OCI, e.g. ghcr.io/.../kernel:1.12.5-rpi-kernel
 #
 # Built by .github/workflows/build-patched-imager.yml
 ARG BASE_IMAGER
