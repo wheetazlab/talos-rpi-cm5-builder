@@ -11,6 +11,9 @@ on:
         required: false
         default: ''
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ── Resolve the Talos version once and share it across all jobs ─────────────
   resolve-version:

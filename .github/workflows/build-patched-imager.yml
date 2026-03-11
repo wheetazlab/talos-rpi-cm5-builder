@@ -49,6 +49,7 @@ jobs:
       contents: read
 
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       TALOS_VERSION:  ${{ github.event.inputs.talos_version || 'v1.12.5' }}
       RPI_KERNEL_REF: ${{ github.event.inputs.rpi_kernel_ref || 'rpi-6.18.y' }}
       IMAGE_PREFIX:   ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder
