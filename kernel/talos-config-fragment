@@ -19,6 +19,38 @@ CONFIG_ARM64_4K_PAGES=y
 # CONFIG_ARM64_16K_PAGES is not set
 # CONFIG_ARM64_64K_PAGES is not set
 
+# ── EFI boot support ────────────────────────────────────────────────────────
+# Talos boots via U-Boot → EFI stub → kernel.  bcm2712_defconfig has NO EFI
+# support because Raspberry Pi OS boots directly via VideoCore firmware.
+# Without these, the kernel cannot accept the EFI handoff from U-Boot and
+# the screen goes black immediately after the boot menu.
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y
+CONFIG_EFIVAR_FS=y
+CONFIG_EFI_EARLYCON=y
+CONFIG_EFI_VARS_PSTORE=y
+CONFIG_EFI_ESRT=y
+CONFIG_EFI_GENERIC_STUB=y
+CONFIG_EFI_ZBOOT=y
+CONFIG_EFI_ARMSTUB_DTB_LOADER=y
+CONFIG_EFI_BOOTLOADER_CONTROL=y
+CONFIG_EFI_PARTITION=y
+
+# ── Framebuffer / console (EFI path) ────────────────────────────────────────
+# Required so the kernel can display output on HDMI via the EFI framebuffer
+# that U-Boot sets up.  Without these, even a successful boot shows nothing.
+CONFIG_FB_EFI=y
+CONFIG_FB_SIMPLE=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_DUMMY_CONSOLE=y
+
+# ── Serial / early console ──────────────────────────────────────────────────
+# Ensure serial earlycon works for debugging (AMBA PL011 is already =y in
+# bcm2712_defconfig, but earlycon itself may not be).
+CONFIG_SERIAL_EARLYCON=y
+
 # ── Integrity Measurement Architecture (IMA) ────────────────────────────────
 # Talos uses IMA for runtime integrity verification of executables and files.
 CONFIG_INTEGRITY=y
