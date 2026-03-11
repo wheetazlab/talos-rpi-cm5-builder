@@ -29,7 +29,7 @@ jobs:
       util_version: ${{ steps.version.outputs.util_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Resolve Talos version and metadata
         id: version
@@ -70,13 +70,13 @@ jobs:
       DOCKER: docker
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build patched U-Boot
         run: make uboot-build
 
       - name: Upload U-Boot binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: uboot-bin
           path: _out/u-boot-nvme.bin
@@ -100,10 +100,10 @@ jobs:
       REGISTRY_USERNAME: ${{ github.repository_owner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download U-Boot binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: uboot-bin
           path: _out/
@@ -136,7 +136,7 @@ jobs:
         run: mv _out/metal-arm64.raw.xz _out/metal-arm64-${{ matrix.cm5_variant }}.raw.xz
 
       - name: Upload disk image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: metal-arm64-${{ matrix.cm5_variant }}
           path: _out/metal-arm64-${{ matrix.cm5_variant }}.raw.xz
@@ -164,7 +164,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Download disk image artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: metal-arm64-*
           path: _out/

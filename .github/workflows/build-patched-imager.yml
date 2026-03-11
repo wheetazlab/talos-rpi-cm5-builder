@@ -56,7 +56,7 @@ jobs:
     steps:
       # ── Checkout ────────────────────────────────────────────────────────────
       - name: Checkout talos-rpi-cm5-builder
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ── Docker buildx ───────────────────────────────────────────────────────
       - name: Set up Docker Buildx
