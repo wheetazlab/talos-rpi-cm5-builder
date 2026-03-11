@@ -24,7 +24,7 @@ ARG RPI_KERNEL_REF
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential bc bison flex libssl-dev libelf-dev \
-        git kmod cpio python3 rsync && \
+        ca-certificates git kmod cpio python3 rsync && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
