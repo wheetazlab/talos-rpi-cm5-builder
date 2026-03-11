@@ -13,11 +13,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Page size ────────────────────────────────────────────────────────────────
-# bcm2712_defconfig defaults to 16K pages. Talos and most container images
-# assume 4K page alignment. Force 4K to avoid silent mmap/alignment issues.
-CONFIG_ARM64_4K_PAGES=y
-# CONFIG_ARM64_16K_PAGES is not set
-# CONFIG_ARM64_64K_PAGES is not set
+# bcm2712_defconfig defaults to 16K pages.  The talos-builder RPi5 build also
+# uses 16K pages and is proven to work.  Keep 16K to avoid cascading config
+# changes from olddefconfig when switching page sizes.
+# (If 4K is needed later, switch only after verifying the full config.)
 
 # ── EFI boot support ────────────────────────────────────────────────────────
 # Talos boots via U-Boot → EFI stub → kernel.  bcm2712_defconfig has NO EFI
@@ -31,7 +30,6 @@ CONFIG_EFI_EARLYCON=y
 CONFIG_EFI_VARS_PSTORE=y
 CONFIG_EFI_ESRT=y
 CONFIG_EFI_GENERIC_STUB=y
-CONFIG_EFI_ZBOOT=y
 CONFIG_EFI_ARMSTUB_DTB_LOADER=y
 CONFIG_EFI_BOOTLOADER_CONTROL=y
 CONFIG_EFI_PARTITION=y
@@ -50,6 +48,11 @@ CONFIG_DUMMY_CONSOLE=y
 # Ensure serial earlycon works for debugging (AMBA PL011 is already =y in
 # bcm2712_defconfig, but earlycon itself may not be).
 CONFIG_SERIAL_EARLYCON=y
+
+# ── Kernel config in-proc (debugging) ───────────────────────────────────────
+# Lets us extract .config from a running kernel via /proc/config.gz.
+CONFIG_IKCONFIG=y
+CONFIG_IKCONFIG_PROC=y
 
 # ── Integrity Measurement Architecture (IMA) ────────────────────────────────
 # Talos uses IMA for runtime integrity verification of executables and files.
