@@ -65,6 +65,6 @@ RUN mkdir -p /install/boot && \
 # Matches the layout expected by patched-imager.Dockerfile:
 #   /boot/vmlinuz
 #   /usr/lib/modules/<version>/
-FROM scratch
+FROM scratch AS kernel
 COPY --from=kernel-build /install/boot/vmlinuz /boot/vmlinuz
 COPY --from=kernel-build /install/usr/lib/modules /usr/lib/modules
