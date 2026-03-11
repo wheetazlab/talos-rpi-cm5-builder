@@ -189,7 +189,7 @@ jobs:
           | Imager | \`${{ env.PATCHED_IMAGER_TAG }}\` |
           | Installer base | \`ghcr.io/siderolabs/installer-base:${{ env.TALOS_VERSION }}\` |
           | Talos | \`${{ env.TALOS_VERSION }}\` |
-          | Kernel | RPi Foundation \`raspberrypi/linux\` (rpi-6.18.y) — \`bcm2712_defconfig\` + Talos config fragment |
+          | Kernel | RPi Foundation \`raspberrypi/linux\` (rpi-6.18.y) — stock Talos \`config-arm64\` + RPi hardware fragment |
           | U-Boot | \`${{ env.UBOOT_VERSION }}\` — patched: BCM2712 NVMe/PCIe |
           | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${{ env.SBC_VERSION }}\` |
           | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}\` |

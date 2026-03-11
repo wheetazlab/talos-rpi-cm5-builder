@@ -10,6 +10,7 @@ ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.2
 UBOOT_VERSION        ?= v2026.04-rc1
 RPI_KERNEL_REF       ?= rpi-6.18.y
+TALOS_PKGS_REF       ?= v1.12.0
 # PKGS_REF and LINUX_KERNEL_VERSION are retained for the stock publish workflow
 # (release notes only — the stock flow uses the upstream Talos kernel, not ours).
 PKGS_REF             ?= b1fc4c6

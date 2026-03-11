@@ -1,0 +1,101 @@
+# ─── RPi CM5 hardware config fragment ────────────────────────────────────────
+# Applied on top of STOCK Talos config-arm64 to add Raspberry Pi BCM2712/RP1
+# hardware support.  The base config already provides all Talos boot
+# infrastructure (EFI, framebuffer, console, initramfs, cgroups, namespaces,
+# bridge netfilter, IPVS, overlayfs, squashfs, BPF, module signing, etc.).
+#
+# This fragment only adds:
+#   1. Page size change (4K → 16K) for BCM2712
+#   2. RPi platform drivers (RP1, BCM2712, BCM2835)
+#   3. NVMe as built-in (for NVMe root boot on CM5)
+#   4. Bridge nftables (not in stock Talos, used by some CNIs)
+#   5. CM5-relevant driver m→y promotions (SDHCI, I2C, PHY, HID, USB serial)
+#
+# Configs were audited against both stock Talos 1.12.0 config-arm64 (kernel
+# 6.17.7) and RPi bcm2712_defconfig (rpi-6.18.y).  Only configs genuinely
+# needed for CM5 hardware or missing from the Talos base are included.
+#
+# Usage:
+#   wget <stock-talos-config-arm64>  -O .config
+#   scripts/kconfig/merge_config.sh -m .config /path/to/rpi-hardware-fragment
+#   make ARCH=arm64 olddefconfig
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Page size (BCM2712 uses 16K) ────────────────────────────────────────────
+# CONFIG_ARM64_4K_PAGES is not set
+CONFIG_ARM64_16K_PAGES=y
+
+# ── NVMe built-in (CM5 boots from NVMe) ─────────────────────────────────────
+CONFIG_BLK_DEV_NVME=y
+
+# ── BCM2712 / RP1 platform ──────────────────────────────────────────────────
+CONFIG_FIRMWARE_RP1=y
+CONFIG_MFD_RP1=y
+CONFIG_PINCTRL_RP1=y
+CONFIG_PINCTRL_BCM2712=y
+CONFIG_COMMON_CLK_RP1=y
+CONFIG_COMMON_CLK_RP1_SDIO=y
+CONFIG_MBOX_RP1=y
+CONFIG_BCM2712_IOMMU=y
+CONFIG_BCM2712_MIP=y
+CONFIG_RP1_PIO=m
+CONFIG_PWM_RP1=y
+CONFIG_PWM_PIO_RP1=m
+CONFIG_PWM_BRCMSTB=y
+CONFIG_PWM_GPIO=m
+
+# ── RPi peripherals (BCM2835/2711/2712) ─────────────────────────────────────
+CONFIG_BCM2835_THERMAL=y
+CONFIG_RASPBERRYPI_GPIOMEM=m
+CONFIG_GPIO_BCM_VIRT=y
+CONFIG_I2C_BCM2708=y
+CONFIG_SPI_GPIO=m
+CONFIG_SPI_RP2040_GPIO_BRIDGE=m
+CONFIG_PINCTRL_MCP23S08=m
+CONFIG_MFD_RASPBERRYPI_POE_HAT=m
+CONFIG_FB_BCM2708=y
+CONFIG_NETWORK_PHY_TIMESTAMPING=y
+
+# ── Bridge nftables (some CNIs use this) ─────────────────────────────────────
+CONFIG_NF_TABLES_BRIDGE=y
+CONFIG_NFT_BRIDGE_META=m
+CONFIG_NFT_BRIDGE_REJECT=m
+
+# ── CM5-relevant driver m→y promotions ───────────────────────────────────────
+# Promote critical CM5 drivers from module to built-in so they're available
+# before module loading.  Only includes drivers relevant to BCM2712/RP1.
+CONFIG_MDIO=y
+CONFIG_I2C_MUX=y
+CONFIG_I2C_ALGOBIT=y
+CONFIG_MMC_SDHCI_PLTFM=y
+CONFIG_MMC_SDHCI_OF_DWCMSHC=y
+CONFIG_MMC_SDHCI_IPROC=y
+CONFIG_MMC_SDHCI_BRCMSTB=y
+CONFIG_PCS_XPCS=y
+CONFIG_DP83867_PHY=y
+
+# ── HID built-in (keyboard/mouse must work without module loading) ──────────
+CONFIG_HID_A4TECH=y
+CONFIG_HID_APPLE=y
+CONFIG_HID_BELKIN=y
+CONFIG_HID_CHERRY=y
+CONFIG_HID_CHICONY=y
+CONFIG_HID_CYPRESS=y
+CONFIG_HID_EZKEY=y
+CONFIG_HID_GYRATION=y
+CONFIG_HID_ITE=y
+CONFIG_HID_KENSINGTON=y
+CONFIG_HID_LOGITECH=y
+CONFIG_HID_MICROSOFT=y
+CONFIG_HID_MONTEREY=y
+CONFIG_HID_PANTHERLORD=y
+CONFIG_HID_PETALYNX=y
+CONFIG_HID_SAMSUNG=y
+CONFIG_HID_SUNPLUS=y
+CONFIG_HID_TOPSEED=y
+
+# ── USB serial built-in (for serial console adapters) ───────────────────────
+CONFIG_USB_SERIAL_CH341=y
+CONFIG_USB_SERIAL_CP210X=y
+CONFIG_USB_SERIAL_FTDI_SIO=y
+CONFIG_USB_SERIAL_PL2303=y

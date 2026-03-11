@@ -22,14 +22,12 @@ Instead of the stock Talos kernel (siderolabs/pkgs mainline 6.18.x), this repo b
 - **BCM2712/RP1 hardware optimizations** — driver backports and tuning specific to the CM5 SoC that aren't in mainline
 - **RPi-specific driver support** — RP1 southbridge, BCM2712 interrupt controller, and other hardware features carried by the RPi Foundation
 
-The kernel is built using `bcm2712_defconfig` supplemented with a [Talos config fragment](kernel/talos-config-fragment) that adds:
-- **IMA** (Integrity Measurement Architecture) for runtime integrity verification
-- **MODULE_SIG_FORCE** to enforce kernel module signature checking
-- **KEXEC** support for in-place Talos upgrades
-- **Bridge netfilter** modules for Kubernetes CNI
-- **4K page size** (overriding bcm2712_defconfig's 16K default for container compatibility)
-- **NVMe as built-in** (not module) for NVMe root boot
-- **IPVS** for kube-proxy
+The kernel is built using **stock Talos `config-arm64`** (from [siderolabs/pkgs](https://github.com/siderolabs/pkgs)) as the base, with an [RPi hardware fragment](kernel/rpi-hardware-fragment) applied on top. This matches the approach used by [talos-builder](https://github.com/swheettaos/talos-builder) — start from stock Talos config (which already has all boot infrastructure: EFI, framebuffer, console, fonts, initramfs decompression, module signing, cgroups, etc.) and add only RPi-specific hardware support:
+- **BCM2712/RP1 platform drivers** — MFD, pinctrl, clocks, IOMMU, interrupts
+- **16K page size** — required by BCM2712
+- **NVMe as built-in** (not module) for NVMe root boot on CM5
+- **Bridge nftables** for Kubernetes CNI
+- **Driver promotions** — HID, USB serial, SDHCI controllers built-in for embedded reliability
 
 **Why we must replace modules too:** `CONFIG_MODULE_SIG_FORCE=y` — Talos rejects any module whose signature doesn't match the key baked into vmlinuz. Each kernel build auto-generates a unique signing key. If we only swap vmlinuz, stock modules (signed by Sidero's key) fail to verify. Critically, `irq-bcm2712-mip.ko` (`CONFIG_BCM2712_MIP=m`) is the MSI-X interrupt controller for BCM2712/RP1. Without it, RP1 probe fails → no macb ethernet → no network. The patched imager Dockerfile extracts `rootfs.sqsh` from the stock initramfs, replaces the entire kernel modules directory with properly-signed copies from our RPi kernel build, and repacks everything.
 
@@ -95,7 +93,7 @@ Both workflow files use `github.repository_owner` for all GHCR paths — they ar
 **Trigger:** Manual only — **Actions → Build RPi Kernel Imager (rpi-6.18.y) → Run workflow**
 
 **What it does:**
-1. Builds `docker/build-rpi-kernel.Dockerfile` — clones `raspberrypi/linux` at `RPI_KERNEL_REF`, applies `bcm2712_defconfig` + `kernel/talos-config-fragment`, compiles vmlinuz + kernel modules (~40–90 min on a 4-core arm64 runner)
+1. Builds `docker/build-rpi-kernel.Dockerfile` — downloads stock Talos `config-arm64`, applies `kernel/rpi-hardware-fragment` (BCM2712/RP1 platform), clones `raspberrypi/linux` at `RPI_KERNEL_REF`, compiles vmlinuz + kernel modules (~40–90 min on a 4-core arm64 runner)
 2. Pushes the kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-rpi-kernel`
 3. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager, replaces `vmlinuz` and repacks `initramfs.xz` with properly-signed kernel modules from the RPi build
 4. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-rpi-kernel`
@@ -257,7 +255,7 @@ make help           Show all targets and version variables
 
 ## What's in the image?
 
-- Talos Linux kernel + initramfs (arm64) — **RPi Foundation kernel** (`rpi-6.18.y`, `bcm2712_defconfig` + Talos config fragment)
+- Talos Linux kernel + initramfs (arm64) — **RPi Foundation kernel** (`rpi-6.18.y`, stock Talos `config-arm64` + RPi hardware fragment)
 - **Patched U-Boot** (`v2026.04-rc1`) with BCM2712 PCIe driver — enables NVMe boot on CM5
 - DTBs from `sbc-raspberrypi v0.2.0`:
   - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)

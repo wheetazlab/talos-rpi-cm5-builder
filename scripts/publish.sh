@@ -102,7 +102,7 @@ This is a patched Talos build for the Raspberry Pi CM5.
 | Imager | \`${PATCHED_IMAGER_TAG}\` |
 | Installer base | \`ghcr.io/siderolabs/installer-base:${TALOS_VERSION}\` |
 | Talos | \`${TALOS_VERSION}\` |
-| Kernel | RPi Foundation \`raspberrypi/linux\` (rpi-6.18.y) — \`bcm2712_defconfig\` + Talos config fragment |
+| Kernel | RPi Foundation \`raspberrypi/linux\` (rpi-6.18.y) — stock Talos \`config-arm64\` + RPi hardware fragment |
 | U-Boot | \`${UBOOT_VER}\` — patched: BCM2712 NVMe/PCIe |
 | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${SBC_VERSION}\` |
 | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION}\` |

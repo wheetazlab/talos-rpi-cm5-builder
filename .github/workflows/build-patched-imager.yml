@@ -11,10 +11,11 @@ name: Build RPi Kernel Imager (rpi-6.18.y)
 # ──────────────────────
 # 1. Build the RPi kernel using docker/build-rpi-kernel.Dockerfile:
 #    a. Clones raspberrypi/linux at RPI_KERNEL_REF (branch or commit SHA)
-#    b. Uses bcm2712_defconfig + kernel/talos-config-fragment
-#       (adds EFI boot, IMA, MODULE_SIG_FORCE, KEXEC, bridge netfilter, NVMe=y)
-#    c. Compiles vmlinuz + kernel modules (arm64)
-#    d. Generates unique MODULE_SIG signing key
+#    b. Downloads stock Talos config-arm64 from siderolabs/pkgs (proven base)
+#    c. Merges kernel/rpi-hardware-fragment (BCM2712/RP1 platform, 16K pages,
+#       NVMe=y, IMA, driver promotions — same approach as talos-builder)
+#    d. Compiles vmlinuz + kernel modules (arm64)
+#    e. Generates unique MODULE_SIG signing key
 # 2. Push the kernel OCI to GHCR.
 # 3. Build docker/patched-imager.Dockerfile which:
 #    a. Extracts rootfs.sqsh from the stock Talos initramfs
@@ -38,6 +39,10 @@ on:
         description: 'raspberrypi/linux git ref (branch, tag, or SHA). Use branch name for latest, or pin to a SHA for reproducibility.'
         required: false
         default: 'rpi-6.18.y'
+      talos_pkgs_ref:
+        description: 'siderolabs/pkgs git tag for stock Talos config-arm64 (must match Talos version series)'
+        required: false
+        default: 'v1.12.0'
 
 jobs:
   build:
@@ -52,6 +57,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       TALOS_VERSION:  ${{ github.event.inputs.talos_version || 'v1.12.5' }}
       RPI_KERNEL_REF: ${{ github.event.inputs.rpi_kernel_ref || 'rpi-6.18.y' }}
+      TALOS_PKGS_REF: ${{ github.event.inputs.talos_pkgs_ref || 'v1.12.0' }}
       IMAGE_PREFIX:   ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder
 
     steps:
@@ -93,6 +99,7 @@ jobs:
             --tag="${{ steps.tags.outputs.kernel }}" \
             --push \
             --build-arg="RPI_KERNEL_REF=${{ env.RPI_KERNEL_REF }}" \
+            --build-arg="TALOS_PKGS_REF=${{ env.TALOS_PKGS_REF }}" \
             .
 
       # ── Extract kernel .config for inspection ─────────────────────────────
@@ -145,7 +152,7 @@ jobs:
           | Detail | Value |
           |--------|-------|
           | Kernel source | \`raspberrypi/linux@${{ env.RPI_KERNEL_REF }}\` |
-          | Base config | \`bcm2712_defconfig\` + \`kernel/talos-config-fragment\` |
+          | Base config | Stock Talos \`config-arm64\` (pkgs \`${{ env.TALOS_PKGS_REF }}\`) + \`kernel/rpi-hardware-fragment\` |
           | Base imager | \`ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}\` |
 
           The patched imager will be used for:
