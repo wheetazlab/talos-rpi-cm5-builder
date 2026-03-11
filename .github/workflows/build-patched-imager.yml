@@ -12,7 +12,7 @@ name: Build RPi Kernel Imager (rpi-6.18.y)
 # 1. Build the RPi kernel using docker/build-rpi-kernel.Dockerfile:
 #    a. Clones raspberrypi/linux at RPI_KERNEL_REF (branch or commit SHA)
 #    b. Uses bcm2712_defconfig + kernel/talos-config-fragment
-#       (adds IMA, MODULE_SIG_FORCE, KEXEC, bridge netfilter, 4K pages, NVMe=y)
+#       (adds EFI boot, IMA, MODULE_SIG_FORCE, KEXEC, bridge netfilter, NVMe=y)
 #    c. Compiles vmlinuz + kernel modules (arm64)
 #    d. Generates unique MODULE_SIG signing key
 # 2. Push the kernel OCI to GHCR.
@@ -94,6 +94,25 @@ jobs:
             --push \
             --build-arg="RPI_KERNEL_REF=${{ env.RPI_KERNEL_REF }}" \
             .
+
+      # ── Extract kernel .config for inspection ─────────────────────────────
+      - name: Extract kernel .config from OCI image
+        run: |
+          docker pull --platform=linux/arm64 "${{ steps.tags.outputs.kernel }}"
+          CID=$(docker create --platform=linux/arm64 "${{ steps.tags.outputs.kernel }}" /nonexistent)
+          docker cp "${CID}:/boot/config" kernel-config-${{ env.RPI_KERNEL_REF }} || echo "No /boot/config in image"
+          docker rm "${CID}"
+          if [ -f kernel-config-${{ env.RPI_KERNEL_REF }} ]; then
+            echo "=== Key boot configs ==="
+            grep -E 'CONFIG_EFI=|CONFIG_EFI_STUB=|CONFIG_ARM64.*PAGES|CONFIG_BLK_DEV_INITRD=' kernel-config-${{ env.RPI_KERNEL_REF }}
+          fi
+
+      - name: Upload kernel .config
+        if: hashFiles('kernel-config-*') != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: kernel-config
+          path: kernel-config-${{ env.RPI_KERNEL_REF }}
 
       # ── Assemble patched imager ─────────────────────────────────────────────
       - name: Build & push patched imager
