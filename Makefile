@@ -63,13 +63,15 @@ GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 #
 # For local builds, override manually:
 #   make build CUSTOM_IMAGER=ghcr.io/<owner>/talos-rpi-cm5-builder/imager:1.12.5-rpi-kernel
+#   make build CUSTOM_OVERLAY=ghcr.io/<owner>/talos-rpi-cm5-builder/overlay:1.12.5-rpi-kernel
 #
 CUSTOM_IMAGER           ?=
+CUSTOM_OVERLAY          ?=
 
 # --- Image refs ----------------------------------------------------------------
 IMAGER_IMAGE        := $(if $(CUSTOM_IMAGER),$(CUSTOM_IMAGER),ghcr.io/siderolabs/imager:$(TALOS_VERSION))
 INSTALLER_BASE      := ghcr.io/siderolabs/installer-base:$(TALOS_VERSION)
-OVERLAY_IMAGE       := ghcr.io/siderolabs/sbc-raspberrypi:$(SBC_RPI_VERSION)
+OVERLAY_IMAGE       := $(if $(CUSTOM_OVERLAY),$(CUSTOM_OVERLAY),ghcr.io/siderolabs/sbc-raspberrypi:$(SBC_RPI_VERSION))
 ISCSI_TOOLS_IMAGE   := ghcr.io/siderolabs/iscsi-tools:$(ISCSI_TOOLS_VERSION)
 UTIL_LINUX_IMAGE    := ghcr.io/siderolabs/util-linux-tools:$(UTIL_LINUX_VERSION)
 

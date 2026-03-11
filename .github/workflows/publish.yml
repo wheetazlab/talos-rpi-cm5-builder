@@ -122,15 +122,16 @@ jobs:
         run: |
           VER=$(echo "${{ env.TALOS_VERSION }}" | tr -d 'v')
           echo "tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-rpi-kernel" >> "$GITHUB_OUTPUT"
+          echo "overlay=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/overlay:${VER}-rpi-kernel" >> "$GITHUB_OUTPUT"
 
       - name: Build Talos image
-        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }}
+        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }} CUSTOM_OVERLAY=${{ steps.imager.outputs.overlay }}
 
       - name: Inject U-Boot into image
         run: make uboot-inject
 
       - name: Build installer
-        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }}
+        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }} CUSTOM_OVERLAY=${{ steps.imager.outputs.overlay }}
 
       - name: Push installer to GHCR
         run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }}-${{ matrix.cm5_variant }}
@@ -190,8 +191,9 @@ jobs:
           | Installer base | \`ghcr.io/siderolabs/installer-base:${{ env.TALOS_VERSION }}\` |
           | Talos | \`${{ env.TALOS_VERSION }}\` |
           | Kernel | RPi Foundation \`raspberrypi/linux\` (rpi-6.18.y) — stock Talos \`config-arm64\` + RPi hardware fragment |
+          | DTBs | Built from kernel source (matching DT bindings) |
           | U-Boot | \`${{ env.UBOOT_VERSION }}\` — patched: BCM2712 NVMe/PCIe |
-          | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${{ env.SBC_VERSION }}\` |
+          | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${{ env.SBC_VERSION }}\` (firmware) + kernel-matched BCM2712 DTBs |
           | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}\` |
           | util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${{ env.UTIL_VERSION }}\` |
 

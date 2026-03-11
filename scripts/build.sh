@@ -26,6 +26,9 @@ DISK=""
 # Custom imager override -- set when using the RPi kernel imager built by
 # the build-patched-imager workflow.  Leave empty to use the upstream imager.
 CUSTOM_IMAGER="${CUSTOM_IMAGER:-}"
+# Custom overlay override -- set when using the kernel-matched overlay built
+# by the build-patched-imager workflow (has DTBs matching the RPi kernel).
+CUSTOM_OVERLAY="${CUSTOM_OVERLAY:-}"
 
 # --- Arg parsing ---------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -37,13 +40,15 @@ while [[ $# -gt 0 ]]; do
     --disk)               DISK="$2";                   shift 2 ;;
     --docker)             DOCKER="$2";                 shift 2 ;;
     --custom-imager)      CUSTOM_IMAGER="$2";          shift 2 ;;
+    --custom-overlay)     CUSTOM_OVERLAY="$2";         shift 2 ;;
     --help|-h)
       echo "Usage: $0 [--talos VERSION] [--sbc VERSION] [--iscsi VERSION] [--util-linux VERSION]"
       echo "       [--disk /dev/rdiskN] [--docker podman|docker]"
-      echo "       [--custom-imager IMAGE]"
+      echo "       [--custom-imager IMAGE] [--custom-overlay IMAGE]"
       echo ""
-      echo "Custom imager override (RPi kernel imager built by build-patched-imager workflow):"
+      echo "Custom overrides (RPi kernel builds from build-patched-imager workflow):"
       echo "  --custom-imager     ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:1.12.5-rpi-kernel"
+      echo "  --custom-overlay    ghcr.io/wheetazlab/talos-rpi-cm5-builder/overlay:1.12.5-rpi-kernel"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -53,7 +58,7 @@ done
 # --- Image references ----------------------------------------------------------
 IMAGER_IMAGE="${CUSTOM_IMAGER:-ghcr.io/siderolabs/imager:${TALOS_VERSION}}"
 INSTALLER_BASE="ghcr.io/siderolabs/installer-base:${TALOS_VERSION}"
-OVERLAY_IMAGE="ghcr.io/siderolabs/sbc-raspberrypi:${SBC_RPI_VERSION}"
+OVERLAY_IMAGE="${CUSTOM_OVERLAY:-ghcr.io/siderolabs/sbc-raspberrypi:${SBC_RPI_VERSION}}"
 ISCSI_TOOLS_IMAGE="ghcr.io/siderolabs/iscsi-tools:${ISCSI_TOOLS_VERSION}"
 UTIL_LINUX_IMAGE="ghcr.io/siderolabs/util-linux-tools:${UTIL_LINUX_VERSION}"
 RAW_IMAGE="${OUT_DIR}/metal-${ARCH}.raw"
@@ -70,7 +75,8 @@ echo " util-linux-tools    : ${UTIL_LINUX_VERSION}"
 echo " Architecture        : ${ARCH}"
 echo " Output directory    : ${OUT_DIR}"
 echo " Target disk         : ${DISK:-<not set, skipping flash>}"
-[[ -n "${CUSTOM_IMAGER}" ]] && echo " ⚠ Custom imager     : ${CUSTOM_IMAGER}"
+[[ -n "${CUSTOM_IMAGER}" ]]  && echo " ⚠ Custom imager     : ${CUSTOM_IMAGER}"
+[[ -n "${CUSTOM_OVERLAY}" ]] && echo " ⚠ Custom overlay    : ${CUSTOM_OVERLAY}"
 echo "============================================================"
 echo ""
 

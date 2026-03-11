@@ -4,7 +4,7 @@
 
 Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM5** on CM4IO-compatible carrier boards (e.g. DeskPi Super6C).
 
-Uses the **Raspberry Pi Foundation's kernel** (`rpi-6.18.y`) instead of the stock Talos mainline kernel, providing native hardware support and macb Ethernet fixes for BCM2712/RP1. Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards).
+Uses the **Raspberry Pi Foundation's kernel** (`rpi-6.18.y`) instead of the stock Talos mainline kernel, providing native hardware support and macb Ethernet fixes for BCM2712/RP1. Includes kernel-matched BCM2712 device trees (DTBs), a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards).
 
 ## Background
 
@@ -93,11 +93,13 @@ Both workflow files use `github.repository_owner` for all GHCR paths — they ar
 **Trigger:** Manual only — **Actions → Build RPi Kernel Imager (rpi-6.18.y) → Run workflow**
 
 **What it does:**
-1. Builds `docker/build-rpi-kernel.Dockerfile` — downloads stock Talos `config-arm64`, applies `kernel/rpi-hardware-fragment` (BCM2712/RP1 platform), clones `raspberrypi/linux` at `RPI_KERNEL_REF`, compiles vmlinuz + kernel modules (~40–90 min on a 4-core arm64 runner)
+1. Builds `docker/build-rpi-kernel.Dockerfile` — downloads stock Talos `config-arm64`, applies `kernel/rpi-hardware-fragment` (BCM2712/RP1 platform), clones `raspberrypi/linux` at `RPI_KERNEL_REF`, compiles vmlinuz + kernel modules + BCM2712 DTBs (~40–90 min on a 4-core arm64 runner)
 2. Pushes the kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-rpi-kernel`
-3. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager, replaces `vmlinuz` and repacks `initramfs.xz` with properly-signed kernel modules from the RPi build
-4. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-rpi-kernel`
-5. Writes a job summary with the exact `custom_imager` tag to copy into the next step
+3. Builds `docker/patched-overlay.Dockerfile` — takes the stock `sbc-raspberrypi` overlay and replaces BCM2712 DTBs with kernel-matched versions (prevents RP1 NULL pointer crashes from stale DT bindings)
+4. Pushes the patched overlay to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/overlay:<ver>-rpi-kernel`
+5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager, replaces `vmlinuz` and repacks `initramfs.xz` with properly-signed kernel modules from the RPi build
+6. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-rpi-kernel`
+7. Writes a job summary with the exact `custom_imager` and `custom_overlay` tags to copy into the next step
 
 ### Step 2: Build and Publish (`publish.yml`)
 

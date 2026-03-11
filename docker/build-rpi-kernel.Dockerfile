@@ -107,8 +107,12 @@ RUN set -eu; FAIL=0; \
     echo "=== Final critical config state ==="; \
     grep -E 'CONFIG_EFI=|CONFIG_EFI_STUB=|CONFIG_BLK_DEV_INITRD=|CONFIG_RD_ZSTD=|CONFIG_FRAMEBUFFER_CONSOLE=|CONFIG_FB_EFI=|CONFIG_VT=|CONFIG_VT_CONSOLE=|CONFIG_FONT_SUPPORT=|CONFIG_ARM64_16K_PAGES=|CONFIG_BLK_DEV_NVME=|CONFIG_FIRMWARE_RP1=|CONFIG_MFD_RP1=' .config || true
 
-# Build kernel image + modules (skip DTBs — provided by sbc-raspberrypi overlay)
-RUN make ARCH=arm64 -j"$(nproc)" Image modules
+# Build kernel image, modules, and BCM2712 device trees.
+# DTBs must be built from the same kernel source to match driver DT bindings.
+# The sbc-raspberrypi overlay ships DTBs compiled from an older kernel, which
+# can cause NULL pointer crashes in drivers that expect newer DT properties
+# (e.g. RP1 southbridge on the CM5).
+RUN make ARCH=arm64 -j"$(nproc)" Image modules dtbs
 
 # Install modules (stripped, no source/build symlinks)
 RUN make ARCH=arm64 modules_install \
@@ -122,11 +126,18 @@ RUN mkdir -p /install/boot && \
     cp arch/arm64/boot/Image /install/boot/vmlinuz && \
     cp .config /install/boot/config
 
+# Copy BCM2712 DTBs (all RPi 5 / CM5 variants)
+RUN mkdir -p /install/boot/dtbs && \
+    cp arch/arm64/boot/dts/broadcom/bcm2712*.dtb /install/boot/dtbs/
+
 # ── Stage 2: Minimal output image ────────────────────────────────────────────
 # Matches the layout expected by patched-imager.Dockerfile:
 #   /boot/vmlinuz
+#   /boot/config
+#   /boot/dtbs/bcm2712*.dtb   — BCM2712 device trees matching the kernel
 #   /usr/lib/modules/<version>/
 FROM scratch AS kernel
 COPY --from=kernel-build /install/boot/vmlinuz /boot/vmlinuz
 COPY --from=kernel-build /install/boot/config /boot/config
+COPY --from=kernel-build /install/boot/dtbs /boot/dtbs
 COPY --from=kernel-build /install/usr/lib/modules /usr/lib/modules

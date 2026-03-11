@@ -82,11 +82,14 @@ jobs:
         run: |
           VER=$(echo "${{ env.TALOS_VERSION }}" | tr -d 'v')
           KERNEL_TAG="${{ env.IMAGE_PREFIX }}/kernel:${VER}-rpi-kernel"
+          OVERLAY_TAG="${{ env.IMAGE_PREFIX }}/overlay:${VER}-rpi-kernel"
           IMAGER_TAG="${{ env.IMAGE_PREFIX }}/imager:${VER}-rpi-kernel"
           echo "kernel=${KERNEL_TAG}" >> "$GITHUB_OUTPUT"
+          echo "overlay=${OVERLAY_TAG}" >> "$GITHUB_OUTPUT"
           echo "imager=${IMAGER_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Kernel image : ${KERNEL_TAG}"
-          echo "Imager image : ${IMAGER_TAG}"
+          echo "Kernel image  : ${KERNEL_TAG}"
+          echo "Overlay image : ${OVERLAY_TAG}"
+          echo "Imager image  : ${IMAGER_TAG}"
 
       # ── Build RPi kernel ────────────────────────────────────────────────────
       - name: Build RPi kernel from ${{ env.RPI_KERNEL_REF }} (~40–90 min)
@@ -121,6 +124,19 @@ jobs:
           name: kernel-config
           path: kernel-config-${{ env.RPI_KERNEL_REF }}
 
+      # ── Build patched overlay (DTBs matched to kernel) ─────────────────────
+      - name: Build & push patched overlay (kernel-matched BCM2712 DTBs)
+        run: |
+          docker buildx build \
+            --file=docker/patched-overlay.Dockerfile \
+            --platform=linux/arm64 \
+            --provenance=false \
+            --tag="${{ steps.tags.outputs.overlay }}" \
+            --push \
+            --build-arg="BASE_OVERLAY=ghcr.io/siderolabs/sbc-raspberrypi:v0.2.0" \
+            --build-arg="KERNEL_IMAGE=${{ steps.tags.outputs.kernel }}" \
+            .
+
       # ── Assemble patched imager ─────────────────────────────────────────────
       - name: Build & push patched imager
         run: |
@@ -141,11 +157,12 @@ jobs:
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
           ## RPi kernel imager ✅
 
-          Set `custom_imager` when triggering **Build and Publish Talos CM5 Image**:
+          Set `custom_imager` and `custom_overlay` when triggering **Build and Publish Talos CM5 Image**:
 
           SUMMARY
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "custom_imager: ${{ steps.tags.outputs.imager }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "custom_imager:  ${{ steps.tags.outputs.imager }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "custom_overlay: ${{ steps.tags.outputs.overlay }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
 
@@ -154,17 +171,19 @@ jobs:
           | Kernel source | \`raspberrypi/linux@${{ env.RPI_KERNEL_REF }}\` |
           | Base config | Stock Talos \`config-arm64\` (pkgs \`${{ env.TALOS_PKGS_REF }}\`) + \`kernel/rpi-hardware-fragment\` |
           | Base imager | \`ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}\` |
+          | Base overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:v0.2.0\` |
 
-          The patched imager will be used for:
-          - \`make build\` → disk image (\`metal-arm64.raw.xz\`) with RPi kernel
+          The patched imager + overlay will be used for:
+          - \`make build\` → disk image (\`metal-arm64.raw.xz\`) with RPi kernel + matching DTBs
           - \`make installer\` → CM5 upgrade installer OCI with RPi kernel
 
           No re-run is needed after each Talos point release unless the kernel version changes.
 
           <details>
-          <summary>Intermediate kernel image (informational)</summary>
+          <summary>Intermediate images (informational)</summary>
 
-          \`${{ steps.tags.outputs.kernel }}\`
+          - Kernel: \`${{ steps.tags.outputs.kernel }}\`
+          - Overlay: \`${{ steps.tags.outputs.overlay }}\`
 
           </details>
           SUMMARY
