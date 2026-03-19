@@ -4,17 +4,17 @@
 
 Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM5** on CM4IO-compatible carrier boards (e.g. DeskPi Super6C).
 
-Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards). Also ships a patched kernel that fixes intermittent TX stalls in the `macb` Ethernet driver caused by PCIe posted-write ordering on the RP1 southbridge.
+Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-tools` system extensions, and the latest `sbc-raspberrypi` overlay with proper DTB support for CM5 (including D0-stepping / Rev 1.1 boards). Also ships a patched kernel with two network fixes: a PCIe posted-write fence for the `macb` Ethernet driver's TSTART register (preventing intermittent TX stalls on the RP1 southbridge), and BCM54213PE PHY EEE/LPI MAC support plus AutogrEEEn disable (preventing silent packet loss when the PHY enters Low Power Idle without matching MAC-side handling).
 
 ## Background
 
 Talos ≤ v1.12.2 could not boot on CM5 boards (Rev 1.1 / D0 BCM2712 stepping) due to a missing `bcm2712-rpi-cm5-*.dtb` and a broken `bcm2712d0.dtbo` overlay. This was resolved in [siderolabs/sbc-raspberrypi#79](https://github.com/siderolabs/sbc-raspberrypi/pull/79), merged Feb 2026, and first released as `sbc-raspberrypi v0.1.9`. This repo uses `v0.2.0` (latest).
 
-NVMe boot support is provided by a patched U-Boot (`v2026.04-rc1`) with BCM2712 PCIe driver support, contributed by [@appkins](https://github.com/appkins) via [siderolabs/sbc-raspberrypi#81](https://github.com/siderolabs/sbc-raspberrypi/issues/81).
+NVMe boot support is provided by a patched U-Boot (`v2026.04-rc1`) with BCM2712 PCIe driver support, contributed by [@appkins](https://github.com/appkins) via [siderolabs/sbc-raspberrypi#81](https://github.com/siderolabs/sbc-raspberrypi/issues/81). (this is currently a pending PR for the sbc-raspberry repo at)
 
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
 
-### macb Ethernet TX stall fix (kernel patch)
+### macb RP1 PCIe TSTART fence fix (kernel patch)
 
 Talos 1.12.x ships kernel 6.18.x. On CM5, the `macb` Ethernet driver (Cadence GEM) sits behind the RP1 southbridge over PCIe. PCIe uses **posted writes** for MMIO — the CPU fires the write and continues without confirmation. Under load, the write of `NCR |= TSTART` (transmit start) can be silently dropped by RP1, leaving the TX ring permanently stalled with **no kernel error, no watchdog timeout, and PHY link staying UP**. The node becomes unreachable on the network while still responding to ping from the local side and appearing healthy from the kernel's perspective.
 
@@ -33,7 +33,23 @@ This is applied in both `macb_start_xmit()` (per-packet TX path) and `macb_tx_re
 
 **Why `readl()` not `macb_readl()`?** `macb_readl()` uses `readl_relaxed()`, which issues a PCIe non-posted read but does NOT include a CPU barrier — the CPU can speculatively re-enter the TX path before the read completes. `readl()` adds an arm64 DSB (Data Synchronization Barrier) that stalls the pipeline until the PCIe round-trip finishes. Under sustained TX load on RP1's PCIe link, this close-the-window guarantee matters. The Raspberry Pi downstream kernel ([`e45c98d`](https://github.com/raspberrypi/linux/commit/e45c98decbb16e58a79c7ec6fbe4374320e814f1)) uses a pre-write TSR read to flush posted writes; our patch uses a post-write NCR readback with full CPU synchronization, covering both TX start paths.
 
-Tracked at: [siderolabs/sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82)
+### BCM54213PE EEE / AutogrEEEn fix (kernel patches)
+
+Talos 1.12.x on CM5 uses the BCM54213PE Gigabit PHY. By default this PHY enables **AutogrEEEn** — an autonomous mode that negotiates 802.3az EEE and asserts LPI (Low Power Idle) signaling toward the MAC without driver involvement. The upstream `macb` driver in Linux 6.18.x has no EEE/LPI MAC-side support: when the PHY asserts LPI, queued frames are silently dropped — PHY link stays UP, no kernel errors appear, and the node looks healthy but stops forwarding traffic.
+
+The fix has two parts:
+
+1. **macb EEE/LPI MAC support** — four patches backported from [raspberrypi/linux rpi-6.18.y PR #7270](https://github.com/raspberrypi/linux/pull/7270):
+   - [`net-macb-rp1-0001-eee-lpi-stats.patch`](patches/net-macb-rp1-0001-eee-lpi-stats.patch) — LPI statistics counters
+   - [`net-macb-rp1-0002-eee-lpi-impl.patch`](patches/net-macb-rp1-0002-eee-lpi-impl.patch) — TX LPI implementation, `macb_tx_lpi_wake()` in `macb_start_xmit()`
+   - [`net-macb-rp1-0003-eee-ethtool.patch`](patches/net-macb-rp1-0003-eee-ethtool.patch) — ethtool EEE `get`/`set` ops
+   - [`net-macb-rp1-0004-eee-enable-rp1.patch`](patches/net-macb-rp1-0004-eee-enable-rp1.patch) — adds `MACB_CAPS_EEE` to `raspberrypi_rp1_config`
+
+2. **BCM54213PE AutogrEEEn disable** — [`net-phy-broadcom-disable-autogreeen.patch`](patches/net-phy-broadcom-disable-autogreeen.patch) adds a BCM54213PE-specific PHY dispatch entry and clears the AutogrEEEn bit during PHY config, giving the kernel driver full EEE control via standard ethtool.
+
+> **Patch ordering note:** `net-macb-rp1-0002-eee-lpi-impl.patch` modifies `macb_start_xmit()` using lines added by the PCIe fence patch as context. `bldr` applies patches alphabetically — `net-macb-flush...` sorts before `net-macb-rp1-...` — so ordering is preserved. Do not rename patches in a way that breaks this.
+
+Both network fixes are tracked at: [siderolabs/sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82)
 
 ---
 
@@ -71,7 +87,7 @@ Flash Raspberry Pi OS to an SD card, boot from it once (this automatically updat
 
 | Component             | Version        |
 |-----------------------|----------------|
-| Talos Linux           | `v1.12.4`      |
+| Talos Linux           | `v1.12.5`      |
 | sbc-raspberrypi       | `v0.2.0`       |
 | iscsi-tools extension | `v0.2.0`       |
 | util-linux-tools      | `2.41.2`       |
@@ -89,17 +105,17 @@ Both workflow files use `github.repository_owner` for all GHCR paths — they ar
 
 ### Step 1 (prerequisite for patched kernel): Build Patched Imager (`build-patched-imager.yml`)
 
-**Run this first** — it rebuilds the kernel with the macb RP1 PCIe fix and produces a patched imager image. Only needs to run once per kernel version (i.e. once per Talos minor release). Skip this step if you only want a standard unpatched image.
+**Run this first** — it rebuilds the kernel with all `net-*.patch` fixes (PCIe TSTART fence + BCM54213PE EEE/AutogrEEEn) and produces a patched imager image. Only needs to run once per kernel version (i.e. once per Talos minor release). Skip this step if you only want a standard unpatched image.
 
-**Trigger:** Manual only — **Actions → Build Patched Imager (macb RP1 PCIe fix) → Run workflow**
+**Trigger:** Manual only — **Actions → Build Patched Imager (macb RP1 EEE + PCIe fix) → Run workflow**
 
 **What it does (no fork needed):**
 1. Clones `siderolabs/pkgs` at the matching release branch (ephemeral, thrown away after the run)
-2. Copies `patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch` into the pkgs kernel patch directory
+2. Copies `patches/net-*.patch` (PCIe TSTART fence + 5 EEE patches) into the pkgs kernel patch directory
 3. Runs `docker buildx build --target=kernel` via `siderolabs/bldr` — downloads Linux source, applies all upstream patches plus ours, compiles `vmlinuz` + kernel modules (~40–90 min on a 4-core arm64 runner)
-4. Pushes the patched kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-macb-fix`
+4. Pushes the patched kernel OCI to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/kernel:<ver>-eee-fix`
 5. Builds `docker/patched-imager.Dockerfile` — takes the official Talos imager, replaces `vmlinuz` and repacks `initramfs.xz` with properly-signed kernel modules
-6. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix`
+6. Pushes the patched imager to GHCR: `ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-eee-fix`
 7. Writes a job summary with the exact `custom_imager` tag to copy into the next step
 
 ### Step 2: Build and Publish (`publish.yml`)
@@ -107,7 +123,7 @@ Both workflow files use `github.repository_owner` for all GHCR paths — they ar
 The standard image build pipeline. Builds disk images and the upgrade installer for both CM5 variants.
 
 **Triggers:**
-- Push a version tag (e.g. `git tag v1.12.4 && git push --tags`) → full build + publish
+- Push a version tag (e.g. `git tag v1.12.5 && git push --tags`) → full build + publish
 - Manual run via **Actions → Build and Publish → Run workflow** with optional version override
 
 **Pipeline jobs:**
@@ -130,7 +146,7 @@ Step 1 (once per kernel version):
 
 Step 2 (every release):
   Actions → Build and Publish → Run workflow
-  ↓ automatically uses ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-macb-fix
+  ↓ automatically uses ghcr.io/<your-username>/talos-rpi-cm5-builder/imager:<ver>-eee-fix
 ```
 
 > **⚠️ Required GitHub permissions (org repos only)**
@@ -258,7 +274,7 @@ make help           Show all targets and version variables
 
 ## What's in the image?
 
-- Talos Linux kernel + initramfs (arm64) — **patched vmlinuz + modules** with macb RP1 PCIe TSTART flush fix
+- Talos Linux kernel + initramfs (arm64) — **patched vmlinuz + modules** with macb RP1 PCIe TSTART fence + BCM54213PE EEE/AutogrEEEn fix
 - **Patched U-Boot** (`v2026.04-rc1`) with BCM2712 PCIe driver — enables NVMe boot on CM5
 - DTBs from `sbc-raspberrypi v0.2.0`:
   - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)
@@ -297,10 +313,10 @@ To upgrade an existing node, use the installer image matching your variant:
 
 ```bash
 # CM5 Lite
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-lite
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.5-lite
 
 # CM5 with eMMC
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.4-emmc
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.5-emmc
 ```
 
 ---
@@ -316,8 +332,11 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-inst
 - [Talos system extensions](https://www.talos.dev/v1.12/talos-guides/configuration/system-extensions/)
 - [DeskPi Super6C](https://deskpi.com/products/deskpi-super6c-raspberry-pi-cm4-6-boards-cluster-mini-itx-board) — example CM4IO-compatible carrier board
 
-**macb RP1 PCIe TX stall**
-- [macb TX stall issue (sbc-raspberrypi#82)](https://github.com/siderolabs/sbc-raspberrypi/issues/82) — upstream tracking issue
-- [RPi downstream fix `359f37f`](https://github.com/raspberrypi/linux/commit/359f37f0faefb712add32a39f98751aea67d5c1f) — rpi-6.12.y (incompatible with 6.18 `tx_pending` semantics)
-- [Mainline fix `bf9cf80`](https://github.com/torvalds/linux/commit/bf9cf80) — net: macb: Fix tx/rx malfunction after phy link down/up (not yet in 6.18.x stable)
-- [Cadence GEM (macb) driver](https://elixir.bootlin.com/linux/v6.18.9/source/drivers/net/ethernet/cadence/macb_main.c) — `macb_start_xmit()` and `macb_tx_restart()` are the patched functions
+**macb RP1 network fixes**
+- [Network issues tracking issue (sbc-raspberrypi#82)](https://github.com/siderolabs/sbc-raspberrypi/issues/82) — upstream tracking issue
+- [RPi downstream PCIe fix `359f37f`](https://github.com/raspberrypi/linux/commit/359f37f0faefb712add32a39f98751aea67d5c1f) — rpi-6.12.y (incompatible with 6.18 `tx_pending` semantics)
+- [Mainline macb fix `bf9cf80`](https://github.com/torvalds/linux/commit/bf9cf80) — net: macb: Fix tx/rx malfunction after phy link down/up (not yet in 6.18.x stable)
+- [Cadence GEM (macb) driver](https://elixir.bootlin.com/linux/v6.18.15/source/drivers/net/ethernet/cadence/macb_main.c) — `macb_start_xmit()` and `macb_tx_restart()` are the patched functions
+- [rpi-6.18.y macb EEE PR #7270](https://github.com/raspberrypi/linux/pull/7270) — 4 EEE/LPI patches backported to our kernel build
+- [BCM54213PE AutogrEEEn dispatch fix `f7576c7`](https://github.com/raspberrypi/linux/commit/f7576c7831a1) — PHY driver dispatch entry
+- [BCM54213PE AutogrEEEn disable `89d02e4`](https://github.com/raspberrypi/linux/commit/89d02e4dc84a) — clears MII_BUF_CNTL_0 bit 0
