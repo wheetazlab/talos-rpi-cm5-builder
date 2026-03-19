@@ -10,7 +10,7 @@ Includes a patched U-Boot with NVMe/PCIe support, `iscsi-tools` and `util-linux-
 
 Talos ≤ v1.12.2 could not boot on CM5 boards (Rev 1.1 / D0 BCM2712 stepping) due to a missing `bcm2712-rpi-cm5-*.dtb` and a broken `bcm2712d0.dtbo` overlay. This was resolved in [siderolabs/sbc-raspberrypi#79](https://github.com/siderolabs/sbc-raspberrypi/pull/79), merged Feb 2026, and first released as `sbc-raspberrypi v0.1.9`. This repo uses `v0.2.0` (latest).
 
-NVMe boot support is provided by a patched U-Boot (`v2026.04-rc1`) with BCM2712 PCIe driver support, contributed by [@appkins](https://github.com/appkins) via [siderolabs/sbc-raspberrypi#81](https://github.com/siderolabs/sbc-raspberrypi/issues/81). (this is currently a pending PR for the sbc-raspberry repo at)
+NVMe boot support is provided by a patched U-Boot (`v2026.04-rc1`) with BCM2712 PCIe driver support, contributed by [@appkins](https://github.com/appkins) via [siderolabs/sbc-raspberrypi#81](https://github.com/siderolabs/sbc-raspberrypi/issues/81). (This is currently a pending PR for the sbc-raspberry repo at the time of writing)
 
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
 
