@@ -1,0 +1,32 @@
+From: Raspberry Pi Ltd <kernel@raspberrypi.com>
+Date: Mon, 10 Mar 2026 00:00:00 +0000
+Subject: [PATCH 4/4] net: cadence: macb: enable EEE for Raspberry Pi RP1
+
+commit 92ba3307431a upstream
+
+Set MACB_CAPS_EEE for the Raspberry Pi 5 RP1 southbridge
+(Cadence GEM_GXL rev 0x00070109 paired with BCM54213PE PHY).
+This activates the EEE TX LPI machinery added in the preceding patch
+for the RP1 GEM instance.
+
+Backported from rpi-6.18.y kernel (raspberrypi/linux PR #7270).
+
+Link: https://github.com/raspberrypi/linux/commit/3a0bcc7d7a1f
+Signed-off-by: Raspberry Pi Ltd <kernel@raspberrypi.com>
+---
+ drivers/net/ethernet/cadence/macb_main.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
+--- a/drivers/net/ethernet/cadence/macb_main.c
++++ b/drivers/net/ethernet/cadence/macb_main.c
+@@ -5626,7 +5626,8 @@ static const struct macb_config versal_config = {
+ static const struct macb_config raspberrypi_rp1_config = {
+ 	.caps = MACB_CAPS_GIGABIT_MODE_AVAILABLE | MACB_CAPS_CLK_HW_CHG |
+ 		MACB_CAPS_JUMBO |
+-		MACB_CAPS_GEM_HAS_PTP,
++		MACB_CAPS_GEM_HAS_PTP |
++		MACB_CAPS_EEE,
+ 	.dma_burst_length = 16,
+ 	.clk_init = macb_clk_init,
+ 	.init = macb_init,

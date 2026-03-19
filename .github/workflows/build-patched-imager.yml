@@ -1,21 +1,32 @@
-name: Build Patched Imager (macb RP1 PCIe fix)
+name: Build Patched Imager (macb RP1 EEE + PCIe fix)
 # ─────────────────────────────────────────────────────────────────────────────
-# Problem
-# ───────
-# Talos ≥ 1.12 ships kernel 6.18.x. On Raspberry Pi CM5, macb (the onboard
-# Ethernet driver in RP1) issues a PCIe *posted write* to the TSTART register.
-# On RP1, posted writes through the PCIe bridge can be silently dropped, leaving
-# the TX ring stalled indefinitely — no kernel log, PHY stays UP, just no Tx.
+# Problems fixed
+# ──────────────
+# Two independent failure modes on Raspberry Pi CM5 (BCM54213PE + RP1 macb/GEM):
 #
-# Fix
-# ───
-# Add `(void)macb_readl(bp, NCR)` after each TSTART write (PCIe read-after-write
-# flush). macb_readl() uses readl_relaxed(), which still issues a PCIe non-posted
-# read. Per PCIe ordering rules, that read cannot complete until all prior posted
-# writes from this requester have been delivered — fencing the TSTART write to RP1.
-# Using macb_readl() rather than the heavier readl() (which adds a DSB) avoids
-# LTO-induced binary layout changes that broke RP1 MSI-X probe on earlier attempt.
-# See: patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch
+# 1. PCIe posted write drops (TSTART stall)
+#    Talos ≥ 1.12 ships kernel 6.18.x. On RP1, PCIe posted writes to the TSTART
+#    register can be silently dropped, leaving the TX ring stalled indefinitely.
+#    Fix: readl() (non-relaxed) fence after each TSTART write. Includes a DSB
+#    barrier on arm64 that stalls the CPU until the PCIe non-posted read
+#    completes, guaranteeing TSTART reaches RP1.
+#    See: patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch
+#
+# 2. BCM54213PE AutogrEEEn silent packet loss (EEE)
+#    The BCM54213PE PHY defaults to AutogrEEEn mode (MII_BUF_CNTL_0 bit 0),
+#    which manages EEE Low Power Idle autonomously — without the MAC's knowledge.
+#    The macb/GEM driver had no EEE/LPI awareness, so when the PHY entered LPI
+#    it silently dropped frames. Disabling AutogrEEEn alone is insufficient;
+#    the MAC must also implement IEEE 802.3az TX LPI support so it can withdraw
+#    from LPI before sending.
+#    Fixes:
+#      patches/net-macb-rp1-0001-eee-lpi-stats.patch    — LPI statistics counters
+#      patches/net-macb-rp1-0002-eee-lpi-impl.patch     — TX LPI implementation
+#      patches/net-macb-rp1-0003-eee-ethtool.patch      — ethtool EEE ops
+#      patches/net-macb-rp1-0004-eee-enable-rp1.patch   — enable for RP1
+#      patches/net-phy-broadcom-disable-autogreeen.patch — disable AutogrEEEn
+#    Backported from rpi-6.18.y (raspberrypi/linux PR #7270).
+#    See: https://github.com/siderolabs/sbc-raspberrypi/issues/82
 #
 # Why we must also replace modules (MODULE_SIG_FORCE)
 # ────────────────────────────────────────────────────
@@ -50,7 +61,7 @@ name: Build Patched Imager (macb RP1 PCIe fix)
 #
 # After this workflow completes (step summary shows the image tag), trigger
 # "Build and Publish Talos CM5 Image" and fill in:
-#   custom_imager: ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:<ver>-macb-fix
+#   custom_imager: ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:<ver>-eee-fix
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -100,8 +111,8 @@ jobs:
         id: tags
         run: |
           VER=$(echo "${{ env.TALOS_VERSION }}" | tr -d 'v')
-          KERNEL_TAG="${{ env.IMAGE_PREFIX }}/kernel:${VER}-macb-fix"
-          IMAGER_TAG="${{ env.IMAGE_PREFIX }}/imager:${VER}-macb-fix"
+          KERNEL_TAG="${{ env.IMAGE_PREFIX }}/kernel:${VER}-eee-fix"
+          IMAGER_TAG="${{ env.IMAGE_PREFIX }}/imager:${VER}-eee-fix"
           echo "kernel=${KERNEL_TAG}" >> "$GITHUB_OUTPUT"
           echo "imager=${IMAGER_TAG}" >> "$GITHUB_OUTPUT"
           echo "Kernel image : ${KERNEL_TAG}"
@@ -117,10 +128,9 @@ jobs:
             | tar -xz --strip-components=1 -C /tmp/pkgs
           echo "pkgs extracted at ref: ${{ env.PKGS_REF }}"
 
-      - name: Apply macb patch to pkgs
+      - name: Apply kernel patches to pkgs
         run: |
-          cp patches/net-macb-flush-TSTART-write-to-RP1-over-PCIe.patch \
-             /tmp/pkgs/kernel/build/patches/
+          cp patches/*.patch /tmp/pkgs/kernel/build/patches/
           echo "kernel/build/patches/ now contains:"
           ls -1 /tmp/pkgs/kernel/build/patches/
 
@@ -170,6 +180,11 @@ jobs:
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
           ## Patched imager ✅
+
+          Fixes applied:
+          - **PCIe TSTART fence** — readl() barrier prevents posted TSTART writes being dropped on RP1
+          - **BCM54213PE AutogrEEEn disable** — PHY uses Native EEE mode; MAC observes RGMII LPI
+          - **macb EEE/LPI support** — MAC implements IEEE 802.3az TX LPI (backport from rpi-6.18.y PR #7270)
 
           Set `custom_imager` when triggering **Build and Publish Talos CM5 Image**:
 
