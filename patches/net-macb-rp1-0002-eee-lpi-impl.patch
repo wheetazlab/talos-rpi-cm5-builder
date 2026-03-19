@@ -53,13 +53,13 @@ diff --git a/drivers/net/ethernet/cadence/macb.h b/drivers/net/ethernet/cadence/
  #define GEM_ENABLE_HS_MAC_SIZE		1
  
 @@ -790,6 +792,7 @@
- #define MACB_CAPS_NEED_TSUCLK		0x00000400
- #define MACB_CAPS_QUEUE_DISABLE		0x00000800
- #define MACB_CAPS_QBV			0x00001000
-+#define MACB_CAPS_EEE			0x00002000
- #define MACB_CAPS_PCS			0x01000000
- #define MACB_CAPS_HIGH_SPEED		0x02000000
- #define MACB_CAPS_CLK_HW_CHG		0x04000000
+ #define MACB_CAPS_NEED_TSUCLK			0x00000400
+ #define MACB_CAPS_QUEUE_DISABLE			0x00000800
+ #define MACB_CAPS_QBV				0x00001000
++#define MACB_CAPS_EEE				0x00002000
+ #define MACB_CAPS_PCS				0x01000000
+ #define MACB_CAPS_HIGH_SPEED			0x02000000
+ #define MACB_CAPS_CLK_HW_CHG			0x04000000
 @@ -1403,6 +1406,11 @@ struct macb {
  
  	struct work_struct	hresp_err_bh_work;
@@ -256,10 +256,10 @@ diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cad
  	netdev_info(dev, "Cadence %s rev 0x%08x at 0x%08lx irq %d (%pM)\n",
  		    macb_is_gem(bp) ? "GEM" : "MACB", macb_readl(bp, MID),
 @@ -5790,6 +5926,7 @@ static void macb_remove(struct platform_device *pdev)
- 			mdiobus_free(bp->mii_bus);
+ 		mdiobus_free(bp->mii_bus);
  
- 			device_set_wakeup_enable(&bp->pdev->dev, 0);
-+			cancel_delayed_work_sync(&bp->tx_lpi_work);
- 			cancel_work_sync(&bp->hresp_err_bh_work);
- 			pm_runtime_disable(&pdev->dev);
- 			pm_runtime_dont_use_autosuspend(&pdev->dev);
+ 		device_set_wakeup_enable(&bp->pdev->dev, 0);
++		cancel_delayed_work_sync(&bp->tx_lpi_work);
+ 		cancel_work_sync(&bp->hresp_err_bh_work);
+ 		pm_runtime_disable(&pdev->dev);
+ 		pm_runtime_dont_use_autosuspend(&pdev->dev);
