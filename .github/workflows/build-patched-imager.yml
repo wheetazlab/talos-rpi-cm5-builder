@@ -70,7 +70,7 @@ on:
       talos_version:
         description: 'Talos version to patch — must match TALOS_VERSION in Makefile'
         required: false
-        default: 'v1.12.4'
+        default: 'v1.12.5'
       pkgs_ref:
         description: 'siderolabs/pkgs commit/branch to build from — must match the exact pkgs commit used for the target Talos release (v1.12.5 → e695c74)'
         required: false
