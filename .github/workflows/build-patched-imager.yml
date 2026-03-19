@@ -130,7 +130,7 @@ jobs:
 
       - name: Apply kernel patches to pkgs
         run: |
-          cp patches/*.patch /tmp/pkgs/kernel/build/patches/
+          cp patches/net-*.patch /tmp/pkgs/kernel/build/patches/
           echo "kernel/build/patches/ now contains:"
           ls -1 /tmp/pkgs/kernel/build/patches/
 
