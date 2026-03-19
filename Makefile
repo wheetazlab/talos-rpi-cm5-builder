@@ -49,16 +49,17 @@ GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 TAG             ?= $(TALOS_VERSION)
 GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
 
-# --- Kernel patch overrides (macb RP1 PCIe TSTART fix) -----------------------
-# The macb driver in Talos ≥ 1.12 (kernel 6.18.x) silently drops PCIe posted
-# writes to the TSTART register on RP1, causing the TX ring to stall after a
-# while. The fix is a read-after-write flush baked into vmlinuz (CONFIG_MACB=y).
+# --- Kernel patch overrides (macb RP1 PCIe TSTART + EEE/AutogrEEEn fix) -----
+# The macb driver in Talos ≥ 1.12 (kernel 6.18.x) has two issues on CM5:
+# 1. PCIe posted writes to TSTART can be silently dropped → TX stall
+# 2. BCM54213PE PHY AutogrEEEn mode causes silent packet loss
+# Both are fixed by kernel patches applied via build-patched-imager workflow.
 #
 # CI automatically sets CUSTOM_IMAGER to the patched imager tag built by the
 # build-patched-imager workflow. Run that workflow once per kernel version first.
 #
 # For local builds, override manually:
-#   make build CUSTOM_IMAGER=ghcr.io/<owner>/talos-rpi-cm5-builder/imager:1.12.4-macb-fix
+#   make build CUSTOM_IMAGER=ghcr.io/<owner>/talos-rpi-cm5-builder/imager:1.12.5-eee-fix
 #
 CUSTOM_IMAGER           ?=
 
