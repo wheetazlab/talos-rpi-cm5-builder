@@ -50,7 +50,7 @@ name: Build Patched Imager (macb RP1 EEE + PCIe fix)
 # 1. Clone siderolabs/pkgs at the release branch (ephemeral, thrown away).
 # 2. Copy our kernel patch into kernel/build/patches/.
 # 3. Run `docker buildx build --target=kernel` on the pkgs Pkgfile.
-#    bldr downloads Linux 6.18.9, applies all patches (including ours),
+#    bldr downloads Linux 6.18.15, applies all patches (including ours),
 #    and compiles vmlinuz + kernel modules.  Takes ~40–90 min.
 # 4. Push the patched kernel OCI to our GHCR namespace.
 # 5. Build docker/patched-imager.Dockerfile which:
@@ -59,9 +59,9 @@ name: Build Patched Imager (macb RP1 EEE + PCIe fix)
 #    c. Repacks rootfs.sqsh → cpio → zstd → initramfs.xz
 #    d. Copies both patched vmlinuz and repacked initramfs into the imager
 #
-# After this workflow completes (step summary shows the image tag), trigger
-# "Build and Publish Talos CM5 Image" and fill in:
-#   custom_imager: ghcr.io/wheetazlab/talos-rpi-cm5-builder/imager:<ver>-eee-fix
+# After this workflow completes, trigger "Build and Publish Talos CM5 Image".
+# The publish workflow automatically computes the patched imager tag from
+# TALOS_VERSION — no manual input needed.
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
