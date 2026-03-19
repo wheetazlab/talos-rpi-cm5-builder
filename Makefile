@@ -4,13 +4,13 @@
 # ------------------------------------------------------------------------------
 
 # --- Versions ------------------------------------------------------------------
-TALOS_VERSION        ?= v1.12.4
+TALOS_VERSION        ?= v1.12.5
 SBC_RPI_VERSION      ?= v0.2.0
 ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.2
 UBOOT_VERSION        ?= v2026.04-rc1
-PKGS_REF             ?= b1fc4c6
-LINUX_KERNEL_VERSION ?= 6.18.9
+PKGS_REF             ?= e695c74
+LINUX_KERNEL_VERSION ?= 6.18.15
 
 # --- Build config --------------------------------------------------------------
 ARCH        ?= arm64

@@ -72,9 +72,9 @@ on:
         required: false
         default: 'v1.12.4'
       pkgs_ref:
-        description: 'siderolabs/pkgs commit/branch to build from — must match the exact pkgs commit used for the target Talos release (v1.12.4 → b1fc4c6)'
+        description: 'siderolabs/pkgs commit/branch to build from — must match the exact pkgs commit used for the target Talos release (v1.12.5 → e695c74)'
         required: false
-        default: 'b1fc4c6'
+        default: 'e695c74'
 
 jobs:
   build:
@@ -86,8 +86,8 @@ jobs:
       contents: read
 
     env:
-      TALOS_VERSION: ${{ github.event.inputs.talos_version || 'v1.12.4' }}
-      PKGS_REF:      ${{ github.event.inputs.pkgs_ref || 'b1fc4c6' }}
+      TALOS_VERSION: ${{ github.event.inputs.talos_version || 'v1.12.5' }}
+      PKGS_REF:      ${{ github.event.inputs.pkgs_ref || 'e695c74' }}
       IMAGE_PREFIX:  ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder
 
     steps:

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       talos_version:
-        description: 'Base Talos version (e.g. v1.12.4). Patched release/installer tags will use <version>-macb-fix.'
+        description: 'Base Talos version (e.g. v1.12.5). Patched release/installer tags will use <version>-eee-fix.'
         required: false
         default: ''
 
@@ -41,9 +41,9 @@ jobs:
             VERSION=$(grep '^TALOS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "patched_release_tag=${VERSION}-macb-fix" >> "$GITHUB_OUTPUT"
+          echo "patched_release_tag=${VERSION}-eee-fix" >> "$GITHUB_OUTPUT"
           VER=$(echo "${VERSION}" | tr -d 'v')
-          echo "patched_imager_tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-macb-fix" >> "$GITHUB_OUTPUT"
+          echo "patched_imager_tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-eee-fix" >> "$GITHUB_OUTPUT"
 
           ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
@@ -115,7 +115,7 @@ jobs:
         id: imager
         run: |
           VER=$(echo "${{ env.TALOS_VERSION }}" | tr -d 'v')
-          echo "tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-macb-fix" >> "$GITHUB_OUTPUT"
+          echo "tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-eee-fix" >> "$GITHUB_OUTPUT"
 
       - name: Build Talos image
         run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }}
@@ -182,7 +182,7 @@ jobs:
           | Imager | \`${{ env.PATCHED_IMAGER_TAG }}\` |
           | Installer base | \`ghcr.io/siderolabs/installer-base:${{ env.TALOS_VERSION }}\` |
           | Talos | \`${{ env.TALOS_VERSION }}\` |
-          | Kernel | Linux ${{ env.LINUX_KERNEL_VERSION }} — \`siderolabs/pkgs@${{ env.PKGS_REF }}\` — patched: macb RP1 PCIe TSTART flush |
+          | Kernel | Linux ${{ env.LINUX_KERNEL_VERSION }} — `siderolabs/pkgs@${{ env.PKGS_REF }}` — patched: macb RP1 PCIe TSTART fence + BCM54213PE EEE/AutogrEEEn fix |
           | U-Boot | \`${{ env.UBOOT_VERSION }}\` — patched: BCM2712 NVMe/PCIe |
           | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${{ env.SBC_VERSION }}\` |
           | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}\` |
