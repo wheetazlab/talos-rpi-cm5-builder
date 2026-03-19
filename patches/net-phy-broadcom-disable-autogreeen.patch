@@ -39,9 +39,9 @@ Link: https://github.com/raspberrypi/linux/commit/f7576c7831a1
 Link: https://github.com/raspberrypi/linux/commit/89d02e4dc84a
 Signed-off-by: Raspberry Pi Ltd <kernel@raspberrypi.com>
 ---
- drivers/net/phy/broadcom.c | 24 ++++++++++++++++++------
+ drivers/net/phy/broadcom.c | 21 ++++++++++++++++++---
  include/linux/brcmphy.h    |  3 +++
- 2 files changed, 21 insertions(+), 6 deletions(-)
+ 2 files changed, 21 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/net/phy/broadcom.c b/drivers/net/phy/broadcom.c
 --- a/drivers/net/phy/broadcom.c
@@ -62,7 +62,7 @@ diff --git a/drivers/net/phy/broadcom.c b/drivers/net/phy/broadcom.c
  	bcm54xx_adjust_rxrefclk(phydev);
  
  	switch (phydev->drv->phy_id & PHY_ID_MATCH_MODEL_MASK) {
-@@ -498,14 +507,17 @@ static int bcm54xx_config_init(struct phy_device *phydev)
+@@ -491,10 +500,16 @@ static int bcm54xx_config_init(struct phy_device *phydev)
  		break;
  	case PHY_ID_BCM54210E:
 -		err = bcm54210e_config_init(phydev);
@@ -77,9 +77,6 @@ diff --git a/drivers/net/phy/broadcom.c b/drivers/net/phy/broadcom.c
  	case PHY_ID_BCM54612E:
  		err = bcm54612e_config_init(phydev);
  		break;
--	case PHY_ID_BCM54213PE:
--		err = bcm54213pe_config_init(phydev);
--		break;
  	case PHY_ID_BCM54616S:
  		err = bcm54616s_config_init(phydev);
  		break;

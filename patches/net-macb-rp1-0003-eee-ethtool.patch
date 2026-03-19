@@ -43,8 +43,8 @@ diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cad
  				     ETHTOOL_COALESCE_TX_USECS,
 @@ -4210,6 +4224,8 @@ static const struct ethtool_ops gem_ethtool_ops = {
  	.set_ringparam		= macb_set_ringparam,
- 	.get_rxnfc		= gem_get_rxnfc,
- 	.set_rxnfc		= gem_set_rxnfc,
+ 	.get_rxnfc			= gem_get_rxnfc,
+ 	.set_rxnfc			= gem_set_rxnfc,
 +	.get_eee		= macb_get_eee,
 +	.set_eee		= macb_set_eee,
  };
