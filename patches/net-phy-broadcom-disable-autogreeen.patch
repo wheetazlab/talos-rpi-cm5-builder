@@ -2,21 +2,9 @@ From: Raspberry Pi Ltd <kernel@raspberrypi.com>
 Date: Mon, 10 Mar 2026 00:00:00 +0000
 Subject: [PATCH] net: phy: broadcom: disable AutogrEEEn mode on BCM54xx
 
-Two commits from rpi-6.18.y kernel combined (raspberrypi/linux PR #7270):
+From rpi-6.18.y kernel (raspberrypi/linux commit 89d02e4dc84a):
 
-1. net: phy: broadcom: fix BCM54213PE per-PHY init never called
-   (commit f7576c7831a1)
-
-   BCM54213PE (PHY_ID = 0x600d84a2) and BCM54210E share the same model
-   ID when masked by PHY_ID_MATCH_MODEL_MASK (0xfffffff0).  As a result,
-   the switch/case dispatch in bcm54xx_config_init() blindly ran
-   bcm54210e_config_init() for BCM54213PE PHYs and bcm54213pe_config_init()
-   was dead code.  Fix by checking phydev->drv->phy_id (the exact driver
-   ID, set from the per-PHY match table) inside the BCM54210E case to
-   dispatch to bcm54213pe_config_init() when appropriate.
-
-2. net: phy: broadcom: disable AutogrEEEn mode on BCM54xx
-   (commit 89d02e4dc84a)
+net: phy: broadcom: disable AutogrEEEn mode on BCM54xx
 
    BCM54xx PHYs default to AutogrEEEn mode (MII_BUF_CNTL_0 bit 0), which
    manages EEE Low Power Idle autonomously without forwarding LPI signaling
@@ -39,9 +27,9 @@ Link: https://github.com/raspberrypi/linux/commit/f7576c7831a1
 Link: https://github.com/raspberrypi/linux/commit/89d02e4dc84a
 Signed-off-by: Raspberry Pi Ltd <kernel@raspberrypi.com>
 ---
- drivers/net/phy/broadcom.c | 21 ++++++++++++++++++---
+ drivers/net/phy/broadcom.c |  9 +++++++++
  include/linux/brcmphy.h    |  3 +++
- 2 files changed, 21 insertions(+), 3 deletions(-)
+ 2 files changed, 12 insertions(+)
 
 diff --git a/drivers/net/phy/broadcom.c b/drivers/net/phy/broadcom.c
 --- a/drivers/net/phy/broadcom.c
@@ -62,24 +50,6 @@ diff --git a/drivers/net/phy/broadcom.c b/drivers/net/phy/broadcom.c
  	bcm54xx_adjust_rxrefclk(phydev);
  
  	switch (phydev->drv->phy_id & PHY_ID_MATCH_MODEL_MASK) {
-@@ -491,10 +500,16 @@ static int bcm54xx_config_init(struct phy_device *phydev)
- 		break;
- 	case PHY_ID_BCM54210E:
--		err = bcm54210e_config_init(phydev);
-+		/* BCM54213PE shares the same model ID as BCM54210E; use the
-+		 * exact driver ID to dispatch to the right per-PHY init.
-+		 */
-+		if (phydev->drv->phy_id == PHY_ID_BCM54213PE)
-+			err = bcm54213pe_config_init(phydev);
-+		else
-+			err = bcm54210e_config_init(phydev);
- 		break;
- 	case PHY_ID_BCM54612E:
- 		err = bcm54612e_config_init(phydev);
- 		break;
- 	case PHY_ID_BCM54616S:
- 		err = bcm54616s_config_init(phydev);
- 		break;
 
 diff --git a/include/linux/brcmphy.h b/include/linux/brcmphy.h
 --- a/include/linux/brcmphy.h
