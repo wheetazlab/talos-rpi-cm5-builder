@@ -3,50 +3,45 @@
 # build.sh — Build a custom Talos image for Raspberry Pi CM5
 #
 # Usage:
-#   ./scripts/build.sh [--talos VERSION] [--sbc VERSION] [--disk /dev/rdiskN]
+#   ./scripts/build.sh [--talos VERSION] [--overlay IMAGE] [--disk /dev/rdiskN]
 #
 # Examples:
 #   ./scripts/build.sh
-#   ./scripts/build.sh --talos v1.12.4 --sbc v0.2.0
+#   ./scripts/build.sh --talos v1.12.6 --overlay ghcr.io/wheetazlab/sbc-raspberrypi:pr88
 #   ./scripts/build.sh --disk /dev/rdisk4   # also flashes after build
 # ------------------------------------------------------------------------------
 
 set -euo pipefail
 
 # --- Defaults ------------------------------------------------------------------
-TALOS_VERSION="${TALOS_VERSION:-v1.12.4}"
-SBC_RPI_VERSION="${SBC_RPI_VERSION:-v0.2.0}"
+TALOS_VERSION="${TALOS_VERSION:-v1.12.6}"
 ISCSI_TOOLS_VERSION="${ISCSI_TOOLS_VERSION:-v0.2.0}"
 UTIL_LINUX_VERSION="${UTIL_LINUX_VERSION:-2.41.2}"
 ARCH="${ARCH:-arm64}"
 DOCKER="${DOCKER:-podman}"
-OVERLAY="rpi_5"
-OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/_out"
+OVERLAY="rpi_generic"
+OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)/_out"
 DISK=""
-# Custom kernel fork overrides -- set these when using a patched talos build
-# (e.g. the macb RP1 PCIe TSTART fix). Leave empty to use upstream images.
-CUSTOM_IMAGER="${CUSTOM_IMAGER:-}"
-CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-}"
+CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/lukaszraczylo/rpi-talos:v1.12.6-k-6.18.24-macb}"
+CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE:-ghcr.io/wheetazlab/sbc-raspberrypi:pr88}"
 
 # --- Arg parsing ---------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --talos)              TALOS_VERSION="$2";          shift 2 ;;
-    --sbc)                SBC_RPI_VERSION="$2";        shift 2 ;;
+    --talos)              TALOS_VERSION="$2";           shift 2 ;;
+    --overlay)            CUSTOM_OVERLAY_IMAGE="$2";   shift 2 ;;
     --iscsi)              ISCSI_TOOLS_VERSION="$2";    shift 2 ;;
     --util-linux)         UTIL_LINUX_VERSION="$2";     shift 2 ;;
     --disk)               DISK="$2";                   shift 2 ;;
     --docker)             DOCKER="$2";                 shift 2 ;;
-    --custom-imager)      CUSTOM_IMAGER="$2";          shift 2 ;;
     --custom-installer)   CUSTOM_INSTALLER_BASE="$2";  shift 2 ;;
     --help|-h)
-      echo "Usage: $0 [--talos VERSION] [--sbc VERSION] [--iscsi VERSION] [--util-linux VERSION]"
+      echo "Usage: $0 [--talos VERSION] [--overlay IMAGE] [--iscsi VERSION] [--util-linux VERSION]"
       echo "       [--disk /dev/rdiskN] [--docker podman|docker]"
-      echo "       [--custom-imager IMAGE] [--custom-installer IMAGE]"
+      echo "       [--custom-installer IMAGE]"
       echo ""
-      echo "Custom kernel overrides (for patched builds, e.g. macb RP1 PCIe fix):"
-      echo "  --custom-imager     ghcr.io/wheetazlab/talos-imager:v1.12.4-macb-fix"
-      echo "  --custom-installer  ghcr.io/wheetazlab/talos-installer-base:v1.12.4-macb-fix"
+      echo "Installer base override:"
+      echo "  --custom-installer  ghcr.io/lukaszraczylo/rpi-talos:v1.12.6-k-6.18.24-macb"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -54,9 +49,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Image references ----------------------------------------------------------
-IMAGER_IMAGE="${CUSTOM_IMAGER:-ghcr.io/siderolabs/imager:${TALOS_VERSION}}"
+IMAGER_IMAGE="ghcr.io/siderolabs/imager:${TALOS_VERSION}"
 INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/siderolabs/installer-base:${TALOS_VERSION}}"
-OVERLAY_IMAGE="ghcr.io/siderolabs/sbc-raspberrypi:${SBC_RPI_VERSION}"
+OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE}"
 ISCSI_TOOLS_IMAGE="ghcr.io/siderolabs/iscsi-tools:${ISCSI_TOOLS_VERSION}"
 UTIL_LINUX_IMAGE="ghcr.io/siderolabs/util-linux-tools:${UTIL_LINUX_VERSION}"
 RAW_IMAGE="${OUT_DIR}/metal-${ARCH}.raw"
@@ -67,13 +62,12 @@ echo " Talos RPI CM5 Builder"
 echo "============================================================"
 echo " Container runtime   : ${DOCKER}"
 echo " Talos version       : ${TALOS_VERSION}"
-echo " sbc-raspberrypi     : ${SBC_RPI_VERSION}"
+echo " overlay image       : ${OVERLAY_IMAGE}"
 echo " iscsi-tools         : ${ISCSI_TOOLS_VERSION}"
 echo " util-linux-tools    : ${UTIL_LINUX_VERSION}"
 echo " Architecture        : ${ARCH}"
 echo " Output directory    : ${OUT_DIR}"
 echo " Target disk         : ${DISK:-<not set, skipping flash>}"
-[[ -n "${CUSTOM_IMAGER}" ]] && echo " ⚠ Custom imager     : ${CUSTOM_IMAGER}"
 [[ -n "${CUSTOM_INSTALLER_BASE}" ]] && echo " ⚠ Custom installer  : ${CUSTOM_INSTALLER_BASE}"
 echo "============================================================"
 echo ""

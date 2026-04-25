@@ -1,0 +1,67 @@
+name: Build Custom SBC Overlay (sidero-community PR #88)
+
+# Builds a custom ghcr.io/wheetazlab/sbc-raspberrypi overlay from the
+# sidero-community/sbc-raspberrypi fork containing PR #88 (full BCM2712/RP1
+# U-Boot support + NVMe + unified rpi_generic installer for Pi4/Pi5).
+#
+# Run this manually whenever you want to refresh the overlay — e.g. when PR #88
+# is updated or you want to track a newer commit.  The resulting image tag is
+# then hardcoded in CUSTOM_OVERLAY_IMAGE in the Makefile for the main publish
+# workflow to use.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr88_sha:
+        description: 'sidero-community/sbc-raspberrypi commit SHA (PR #88 head)'
+        required: false
+        default: 'e5ab77462b5ed1ee594ae71f35c0262b51a72524'
+      overlay_tag:
+        description: 'Tag for the overlay image (e.g. pr88, pr88-2, latest)'
+        required: false
+        default: 'pr88'
+
+jobs:
+  build-overlay:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clone sidero-community/sbc-raspberrypi at PR #88
+        run: |
+          git clone https://github.com/sidero-community/sbc-raspberrypi
+          cd sbc-raspberrypi
+          git fetch --depth=1 origin ${{ github.event.inputs.pr88_sha }} || true
+          git checkout ${{ github.event.inputs.pr88_sha }}
+
+      - name: Build and push custom overlay
+        run: |
+          cd sbc-raspberrypi
+          make sbc-raspberrypi \
+            REGISTRY=ghcr.io \
+            USERNAME=${{ github.repository_owner }} \
+            TAG=${{ github.event.inputs.overlay_tag }} \
+            PLATFORM=linux/arm64 \
+            PUSH=true
+
+      - name: Summary
+        run: |
+          echo "## Custom SBC Overlay Built" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Item | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Source | sidero-community/sbc-raspberrypi @ \`${{ github.event.inputs.pr88_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`ghcr.io/${{ github.repository_owner }}/sbc-raspberrypi:${{ github.event.inputs.overlay_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Update \`CUSTOM_OVERLAY_IMAGE\` in the Makefile to use this new tag." >> "$GITHUB_STEP_SUMMARY"

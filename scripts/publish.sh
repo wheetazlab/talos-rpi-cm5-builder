@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# publish.sh (patched flow) mirrors .github/workflows/publish.yml
+# publish.sh mirrors .github/workflows/publish.yml
 # - builds both variants (lite, emmc)
-# - uses patched imager
-# - pushes installers tagged <talos>-macb-fix-<variant>
-# - creates release tag <talos>-macb-fix with two disk images
+# - uses stock Talos imager with custom prebuilt installer base + custom overlay
+# - pushes installers tagged <talos>-rpi-kernel-<variant>
+# - creates release tag <talos>-rpi-kernel with two disk images
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-TALOS_VERSION="${TALOS_VERSION:-v1.12.4}"
+TALOS_VERSION="${TALOS_VERSION:-v1.12.6}"
 DOCKER="${DOCKER:-podman}"
 GHCR_ORG="${GHCR_ORG:-wheetazlab}"
 GH_REPO="${GH_REPO:-${GHCR_ORG}/talos-rpi-cm5-builder}"
-PATCH_SUFFIX="${PATCH_SUFFIX:-macb-fix}"
+PATCH_SUFFIX="${PATCH_SUFFIX:-rpi-kernel}"
 PATCHED_RELEASE_TAG="${PATCHED_RELEASE_TAG:-${TALOS_VERSION}-${PATCH_SUFFIX}}"
 ARCH="${ARCH:-arm64}"
+CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/lukaszraczylo/rpi-talos:v1.12.6-k-6.18.24-macb}"
+CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE:-ghcr.io/wheetazlab/sbc-raspberrypi:pr88}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,9 +39,12 @@ Options:
   --gh-repo <owner/repo>        GitHub releases repo (default: ${GH_REPO})
   --patch-suffix <suffix>       Suffix for patched line (default: ${PATCH_SUFFIX})
   --patched-release-tag <tag>   Override release tag (default: ${PATCHED_RELEASE_TAG})
+  --custom-installer <image>    Base installer image (default: ${CUSTOM_INSTALLER_BASE})
 EOF
       exit 0
       ;;
+    --custom-installer) CUSTOM_INSTALLER_BASE="$2"; shift 2 ;;
+    --overlay-image) CUSTOM_OVERLAY_IMAGE="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -49,10 +54,8 @@ if [[ "${PATCHED_RELEASE_TAG}" == "${TALOS_VERSION}-${PATCH_SUFFIX}" ]]; then
 fi
 
 VER="${TALOS_VERSION#v}"
-CUSTOM_IMAGER="ghcr.io/${GHCR_ORG}/talos-rpi-cm5-builder/imager:${VER}-${PATCH_SUFFIX}"
 OUT_DIR="${REPO_ROOT}/_out"
-LITE_XZ="${OUT_DIR}/metal-${ARCH}-lite.raw.xz"
-EMMC_XZ="${OUT_DIR}/metal-${ARCH}-emmc.raw.xz"
+DISK_IMAGE="${OUT_DIR}/metal-${ARCH}.raw.xz"
 
 command -v gh >/dev/null 2>&1 || {
   echo "ERROR: gh CLI not found. Install and authenticate first."
@@ -61,83 +64,63 @@ command -v gh >/dev/null 2>&1 || {
 
 echo "==> Patched publish"
 echo "    talos_version      : ${TALOS_VERSION}"
-echo "    patched_imager     : ${CUSTOM_IMAGER}"
+echo "    imager             : ghcr.io/siderolabs/imager:${TALOS_VERSION}"
+echo "    installer_base     : ${CUSTOM_INSTALLER_BASE}"
+echo "    overlay_image      : ${CUSTOM_OVERLAY_IMAGE}"
 echo "    patched_release    : ${PATCHED_RELEASE_TAG}"
 echo "    gh_repo            : ${GH_REPO}"
 
-rm -f "${LITE_XZ}" "${EMMC_XZ}"
+rm -f "${DISK_IMAGE}"
 
 pushd "${REPO_ROOT}" >/dev/null
 
-make uboot-build DOCKER="${DOCKER}"
-
-for variant in lite emmc; do
-  echo "==> Building variant: ${variant}"
-  make build DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" CM5_VARIANT="${variant}" CUSTOM_IMAGER="${CUSTOM_IMAGER}"
-  make uboot-inject
-  make installer DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" CM5_VARIANT="${variant}" CUSTOM_IMAGER="${CUSTOM_IMAGER}"
-  make push-installer DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" INSTALLER_TAG="${PATCHED_RELEASE_TAG}-${variant}"
-  mv "${OUT_DIR}/metal-${ARCH}.raw.xz" "${OUT_DIR}/metal-${ARCH}-${variant}.raw.xz"
-done
+echo "==> Building image"
+make build DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE}" CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE}"
+make installer DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE}" CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE}"
+make push-installer DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" INSTALLER_TAG="${PATCHED_RELEASE_TAG}" CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE}"
 
 ISCSI_VERSION="$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 UTIL_VERSION="$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
-SBC_VERSION="$(grep '^SBC_RPI_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
-UBOOT_VER="$(grep '^UBOOT_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
-PKGS_REF="$(grep '^PKGS_REF' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 LINUX_KERNEL_VERSION="$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
-VER="${TALOS_VERSION#v}"
-PATCHED_IMAGER_TAG="ghcr.io/${GHCR_ORG}/talos-rpi-cm5-builder/imager:${VER}-${PATCH_SUFFIX}"
-EXTENSIONS="ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION} ghcr.io/siderolabs/util-linux-tools:${UTIL_VERSION}"
 
 NOTES=$(cat <<EOF
 > ⚠️ Experimental build, use at your own risk.
 
-This is a patched Talos build for the Raspberry Pi CM5.
+This is a patched Talos build for **Raspberry Pi CM4 and CM5** boards.
+Uses the \`rpi_generic\` overlay (PR #88) which supports CM4IO/CM5IO carriers and Pi 5.
 
 ### Components
 
 | Component | Version / Image |
 |-----------|------------------|
-| Imager | \`${PATCHED_IMAGER_TAG}\` |
-| Installer base | \`ghcr.io/siderolabs/installer-base:${TALOS_VERSION}\` |
+| Imager | \`ghcr.io/siderolabs/imager:${TALOS_VERSION}\` |
+| Installer base | \`${CUSTOM_INSTALLER_BASE}\` |
 | Talos | \`${TALOS_VERSION}\` |
-| Kernel | Linux ${LINUX_KERNEL_VERSION} — \`siderolabs/pkgs@${PKGS_REF}\` — patched: macb RP1 PCIe TSTART flush |
-| U-Boot | \`${UBOOT_VER}\` — patched: BCM2712 NVMe/PCIe |
-| SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${SBC_VERSION}\` |
+| Kernel | \`Linux ${LINUX_KERNEL_VERSION}\` — prebuilt vendor-kernel via \`${CUSTOM_INSTALLER_BASE}\` |
+| SBC overlay | \`${CUSTOM_OVERLAY_IMAGE}\` (PR #88 — BCM2712/RP1 U-Boot + NVMe, rpi_generic) |
 | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION}\` |
 | util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${UTIL_VERSION}\` |
 
-### config.txt overlay options
+### Supported boards
 
-- \`dtparam=i2c_arm=on\` _(always included by default)_
-
-### Extra kernel args
-
-| Variant | Kernel args |
-|---------|-------------|
-| \`lite\` (CM5 Lite — no onboard eMMC) | \`module_blacklist=sdhci_brcmstb\` |
-| \`emmc\` (CM5 with onboard eMMC) | _(none — defaults only)_ |
+- Raspberry Pi CM5 (CM5IO, CM4IO-compatible carriers e.g. DeskPi Super6C)
+- Raspberry Pi CM4 (CM4IO and compatible carriers)
+- Raspberry Pi 5
 
 ### What's available
 
-- 📦 **\`metal-arm64-lite.raw.xz\`** — CM5 Lite (no onboard eMMC)
-- 📦 **\`metal-arm64-emmc.raw.xz\`** — CM5 with onboard eMMC
-- ⚙️  **Installer — CM5 Lite:** \`ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}-lite\`
-- ⚙️  **Installer — CM5 eMMC:** \`ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}-emmc\`
+- 📦 **\`metal-arm64.raw.xz\`** — disk image for CM4/CM5/Pi5
+- ⚙️  **Installer:** \`ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}\`
 
 ### Install
 
 - **Fresh install**
-  - Download the raw disk image for your CM5 variant from this release
+  - Download \`metal-arm64.raw.xz\` from this release
   - Flash with \`dd\` or your favorite tool
 
 - **Upgrade existing node**
   \`\`\`bash
-  # CM5 Lite
-  talosctl upgrade --nodes <NODE_IP> --image ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}-lite
-  # CM5 with eMMC
-  talosctl upgrade --nodes <NODE_IP> --image ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}-emmc
+  talosctl upgrade --nodes <NODE_IP> --image ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}
   \`\`\`
 EOF
 )
@@ -150,8 +133,7 @@ fi
 gh release delete "${PATCHED_RELEASE_TAG}" --repo "${GH_REPO}" --yes 2>/dev/null || true
 gh release create \
   "${PATCHED_RELEASE_TAG}" \
-  "${LITE_XZ}" \
-  "${EMMC_XZ}" \
+  "${DISK_IMAGE}" \
   --repo "${GH_REPO}" \
   --title "${PATCHED_RELEASE_TAG}" \
   ${PRERELEASE_FLAG} \

@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-TALOS_VERSION="${TALOS_VERSION:-v1.12.4}"
+TALOS_VERSION="${TALOS_VERSION:-v1.12.6}"
 DOCKER="${DOCKER:-podman}"
 GHCR_ORG="${GHCR_ORG:-wheetazlab}"
 GH_REPO="${GH_REPO:-${GHCR_ORG}/talos-rpi-cm5-builder}"

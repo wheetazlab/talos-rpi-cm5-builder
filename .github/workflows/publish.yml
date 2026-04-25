@@ -1,4 +1,4 @@
-name: Build and Publish Talos CM5 Image
+name: Build and Publish Talos CM4/CM5 Image
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       talos_version:
-        description: 'Base Talos version (e.g. v1.12.5). Patched release/installer tags will use <version>-eee-fix.'
+        description: 'Base Talos version (e.g. v1.12.6)'
         required: false
         default: ''
 
@@ -18,11 +18,8 @@ jobs:
     outputs:
       talos_version: ${{ steps.version.outputs.version }}
       patched_release_tag: ${{ steps.version.outputs.patched_release_tag }}
-      patched_imager_tag: ${{ steps.version.outputs.patched_imager_tag }}
-      extensions: ${{ steps.version.outputs.extensions }}
-      sbc_version: ${{ steps.version.outputs.sbc_version }}
-      uboot_version: ${{ steps.version.outputs.uboot_version }}
-      pkgs_ref: ${{ steps.version.outputs.pkgs_ref }}
+      installer_base: ${{ steps.version.outputs.installer_base }}
+      overlay_image: ${{ steps.version.outputs.overlay_image }}
       linux_kernel_version: ${{ steps.version.outputs.linux_kernel_version }}
       iscsi_version: ${{ steps.version.outputs.iscsi_version }}
       util_version: ${{ steps.version.outputs.util_version }}
@@ -41,69 +38,35 @@ jobs:
             VERSION=$(grep '^TALOS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "patched_release_tag=${VERSION}-eee-fix" >> "$GITHUB_OUTPUT"
-          VER=$(echo "${VERSION}" | tr -d 'v')
-          echo "patched_imager_tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-eee-fix" >> "$GITHUB_OUTPUT"
-
+          echo "patched_release_tag=${VERSION}-rpi-kernel" >> "$GITHUB_OUTPUT"
           ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
-          SBC=$(grep '^SBC_RPI_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
-          UBOOT=$(grep '^UBOOT_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
-          PKGS=$(grep '^PKGS_REF' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
           LINUX=$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
-          echo "extensions=ghcr.io/siderolabs/iscsi-tools:${ISCSI} ghcr.io/siderolabs/util-linux-tools:${UTIL}" >> "$GITHUB_OUTPUT"
-          echo "sbc_version=${SBC}" >> "$GITHUB_OUTPUT"
-          echo "uboot_version=${UBOOT}" >> "$GITHUB_OUTPUT"
-          echo "pkgs_ref=${PKGS}" >> "$GITHUB_OUTPUT"
+          INSTALLER_BASE=$(grep '^CUSTOM_INSTALLER_BASE' Makefile | awk -F'?=' '{print $2}' | sed 's/^ *//' | tr -d ' ')
+          OVERLAY_IMAGE=$(grep '^CUSTOM_OVERLAY_IMAGE' Makefile | awk -F'?=' '{print $2}' | sed 's/^ *//' | tr -d ' ')
+          echo "overlay_image=${OVERLAY_IMAGE}" >> "$GITHUB_OUTPUT"
           echo "linux_kernel_version=${LINUX}" >> "$GITHUB_OUTPUT"
+          echo "installer_base=${INSTALLER_BASE}" >> "$GITHUB_OUTPUT"
           echo "iscsi_version=${ISCSI}" >> "$GITHUB_OUTPUT"
           echo "util_version=${UTIL}" >> "$GITHUB_OUTPUT"
 
-  # ── Build patched U-Boot once (variant-agnostic) ────────────────────────────
-  build-uboot:
-    runs-on: ubuntu-24.04-arm
-    needs: resolve-version
-    env:
-      DOCKER: docker
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Build patched U-Boot
-        run: make uboot-build
-
-      - name: Upload U-Boot binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: uboot-bin
-          path: _out/u-boot-nvme.bin
-
-  # ── Build image + installer for each variant in parallel ────────────────────
+  # ── Build image + installer ────────────────────────────────────────────────────────────────────└
   build:
     runs-on: ubuntu-24.04-arm
-    needs: [resolve-version, build-uboot]
+    needs: [resolve-version]
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        cm5_variant: [lite, emmc]
     env:
       DOCKER: docker
       TALOS_VERSION: ${{ needs.resolve-version.outputs.talos_version }}
       PATCHED_RELEASE_TAG: ${{ needs.resolve-version.outputs.patched_release_tag }}
-      CM5_VARIANT: ${{ matrix.cm5_variant }}
       REGISTRY: ghcr.io
       REGISTRY_USERNAME: ${{ github.repository_owner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Download U-Boot binary
-        uses: actions/download-artifact@v4
-        with:
-          name: uboot-bin
-          path: _out/
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
@@ -111,34 +74,22 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y xz-utils
 
-      - name: Compute patched imager tag
-        id: imager
-        run: |
-          VER=$(echo "${{ env.TALOS_VERSION }}" | tr -d 'v')
-          echo "tag=ghcr.io/${{ github.repository_owner }}/talos-rpi-cm5-builder/imager:${VER}-eee-fix" >> "$GITHUB_OUTPUT"
-
       - name: Build Talos image
-        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }}
-
-      - name: Inject U-Boot into image
-        run: make uboot-inject
+        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }}
 
       - name: Build installer
-        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CM5_VARIANT=${{ matrix.cm5_variant }} CUSTOM_IMAGER=${{ steps.imager.outputs.tag }}
+        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }}
 
       - name: Push installer to GHCR
-        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }}-${{ matrix.cm5_variant }}
-
-      - name: Rename disk image with variant suffix
-        run: mv _out/metal-arm64.raw.xz _out/metal-arm64-${{ matrix.cm5_variant }}.raw.xz
+        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }}
 
       - name: Upload disk image
         uses: actions/upload-artifact@v4
         with:
-          name: metal-arm64-${{ matrix.cm5_variant }}
-          path: _out/metal-arm64-${{ matrix.cm5_variant }}.raw.xz
+          name: metal-arm64
+          path: _out/metal-arm64.raw.xz
 
-  # ── Create GitHub release with both variant artifacts ───────────────────────
+  # ── Create GitHub release ───────────────────────────────────────────────────
   release:
     runs-on: ubuntu-24.04-arm
     needs: [resolve-version, build]
@@ -147,11 +98,8 @@ jobs:
     env:
       TALOS_VERSION: ${{ needs.resolve-version.outputs.talos_version }}
       PATCHED_RELEASE_TAG: ${{ needs.resolve-version.outputs.patched_release_tag }}
-      PATCHED_IMAGER_TAG: ${{ needs.resolve-version.outputs.patched_imager_tag }}
-      EXTENSIONS: ${{ needs.resolve-version.outputs.extensions }}
-      SBC_VERSION: ${{ needs.resolve-version.outputs.sbc_version }}
-      UBOOT_VERSION: ${{ needs.resolve-version.outputs.uboot_version }}
-      PKGS_REF: ${{ needs.resolve-version.outputs.pkgs_ref }}
+      INSTALLER_BASE: ${{ needs.resolve-version.outputs.installer_base }}
+      OVERLAY_IMAGE: ${{ needs.resolve-version.outputs.overlay_image }}
       LINUX_KERNEL_VERSION: ${{ needs.resolve-version.outputs.linux_kernel_version }}
       ISCSI_VERSION: ${{ needs.resolve-version.outputs.iscsi_version }}
       UTIL_VERSION: ${{ needs.resolve-version.outputs.util_version }}
@@ -159,12 +107,11 @@ jobs:
       REGISTRY_USERNAME: ${{ github.repository_owner }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - name: Download disk image artifacts
+      - name: Download disk image artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: metal-arm64-*
+          name: metal-arm64
           path: _out/
-          merge-multiple: true
 
       - name: Create GitHub Release
         env:
@@ -173,51 +120,41 @@ jobs:
           NOTES=$(cat <<EOF
           > ⚠️ Experimental build, use at your own risk.
 
-          This is a patched Talos build for the Raspberry Pi CM5.
+          This is a patched Talos build for **Raspberry Pi CM4 and CM5** boards.
+          Uses the `rpi_generic` overlay (PR #88) which supports CM4IO/CM5IO carriers and Pi 5.
 
           ### Components
 
           | Component | Version / Image |
           |-----------|------------------|
-          | Imager | \`${{ env.PATCHED_IMAGER_TAG }}\` |
-          | Installer base | \`ghcr.io/siderolabs/installer-base:${{ env.TALOS_VERSION }}\` |
+          | Imager | \`ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}\` |
+          | Installer base | \`${{ env.INSTALLER_BASE }}\` |
           | Talos | \`${{ env.TALOS_VERSION }}\` |
-          | Kernel | Linux ${{ env.LINUX_KERNEL_VERSION }} — `siderolabs/pkgs@${{ env.PKGS_REF }}` — patched: macb RP1 PCIe TSTART fence + BCM54213PE EEE/AutogrEEEn fix |
-          | U-Boot | \`${{ env.UBOOT_VERSION }}\` — patched: BCM2712 NVMe/PCIe |
-          | SBC overlay | \`ghcr.io/siderolabs/sbc-raspberrypi:${{ env.SBC_VERSION }}\` |
+          | Kernel | Linux ${{ env.LINUX_KERNEL_VERSION }} — prebuilt vendor-kernel via \`${{ env.INSTALLER_BASE }}\` |
+          | SBC overlay | \`${{ env.OVERLAY_IMAGE }}\` (PR #88 — BCM2712/RP1 U-Boot + NVMe, rpi_generic) |
           | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}\` |
           | util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${{ env.UTIL_VERSION }}\` |
 
-          ### config.txt overlay options
+          ### Supported boards
 
-          - \`dtparam=i2c_arm=on\` _(always included by default)_
-
-          ### Extra kernel args
-
-          | Variant | Kernel args |
-          |---------|-------------|
-          | \`lite\` (CM5 Lite — no onboard eMMC) | \`module_blacklist=sdhci_brcmstb\` |
-          | \`emmc\` (CM5 with onboard eMMC) | _(none — defaults only)_ |
+          - Raspberry Pi CM5 (CM5IO, CM4IO-compatible carriers e.g. DeskPi Super6C)
+          - Raspberry Pi CM4 (CM4IO and compatible carriers)
+          - Raspberry Pi 5
 
           ### What's available
 
-          - 📦 **\`metal-arm64-lite.raw.xz\`** — CM5 Lite (no onboard eMMC)
-          - 📦 **\`metal-arm64-emmc.raw.xz\`** — CM5 with onboard eMMC
-          - ⚙️  **Installer — CM5 Lite:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-lite\`
-          - ⚙️  **Installer — CM5 eMMC:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-emmc\`
+          - 📦 **\`metal-arm64.raw.xz\`** — disk image for CM4/CM5/Pi5
+          - ⚙️  **Installer:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}\`
 
           ### Install
 
           - **Fresh install**
-            - Download the raw disk image for your CM5 variant from this release
+            - Download \`metal-arm64.raw.xz\` from this release
             - Flash with \`dd\` or your favorite tool
 
           - **Upgrade existing node**
             \`\`\`bash
-            # CM5 Lite
-            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-lite
-            # CM5 with eMMC
-            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}-emmc
+            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}
             \`\`\`
 
           EOF
@@ -225,8 +162,7 @@ jobs:
           gh release delete ${{ env.PATCHED_RELEASE_TAG }} --yes 2>/dev/null || true
           gh release create \
             ${{ env.PATCHED_RELEASE_TAG }} \
-            ./_out/metal-arm64-lite.raw.xz \
-            ./_out/metal-arm64-emmc.raw.xz \
+            ./_out/metal-arm64.raw.xz \
             --title "${{ env.PATCHED_RELEASE_TAG }}" \
             $([[ "${{ env.TALOS_VERSION }}" =~ -(alpha|beta|rc)\. ]] && echo "--prerelease") \
             --notes "$NOTES"
