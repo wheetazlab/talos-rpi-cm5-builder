@@ -2,22 +2,21 @@
 set -euo pipefail
 
 # publish.sh mirrors .github/workflows/publish.yml
-# - builds both variants (lite, emmc)
-# - uses stock Talos imager with custom prebuilt installer base + custom overlay
-# - pushes installers tagged <talos>-rpi-kernel-<variant>
-# - creates release tag <talos>-rpi-kernel with two disk images
+# - builds disk image + installer using custom prebuilt kernel + custom overlay
+# - pushes installer tagged <talos>-k-macb (or PATCHED_RELEASE_TAG)
+# - creates GitHub release with disk image
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-TALOS_VERSION="${TALOS_VERSION:-v1.12.6}"
+TALOS_VERSION="${TALOS_VERSION:-v1.12.7}"
 DOCKER="${DOCKER:-podman}"
 GHCR_ORG="${GHCR_ORG:-wheetazlab}"
 GH_REPO="${GH_REPO:-${GHCR_ORG}/talos-rpi-cm5-builder}"
-PATCH_SUFFIX="${PATCH_SUFFIX:-rpi-kernel}"
+PATCH_SUFFIX="${PATCH_SUFFIX:-k-macb}"
 PATCHED_RELEASE_TAG="${PATCHED_RELEASE_TAG:-${TALOS_VERSION}-${PATCH_SUFFIX}}"
 ARCH="${ARCH:-arm64}"
-CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/lukaszraczylo/rpi-talos:v1.12.6-k-6.18.24-macb}"
+CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb}"
 CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE:-ghcr.io/wheetazlab/sbc-raspberrypi:pr88}"
 
 while [[ $# -gt 0 ]]; do
@@ -81,7 +80,6 @@ make push-installer DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" INSTALLE
 
 ISCSI_VERSION="$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 UTIL_VERSION="$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
-LINUX_KERNEL_VERSION="$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 
 NOTES=$(cat <<EOF
 > ⚠️ Experimental build, use at your own risk.
@@ -94,9 +92,8 @@ Uses the \`rpi_generic\` overlay (PR #88) which supports CM4IO/CM5IO carriers an
 | Component | Version / Image |
 |-----------|------------------|
 | Imager | \`ghcr.io/siderolabs/imager:${TALOS_VERSION}\` |
-| Installer base | \`${CUSTOM_INSTALLER_BASE}\` |
+| Installer base | \`${CUSTOM_INSTALLER_BASE}\` (standard Talos kernel + 3 macb patches) |
 | Talos | \`${TALOS_VERSION}\` |
-| Kernel | \`Linux ${LINUX_KERNEL_VERSION}\` — prebuilt vendor-kernel via \`${CUSTOM_INSTALLER_BASE}\` |
 | SBC overlay | \`${CUSTOM_OVERLAY_IMAGE}\` (PR #88 — BCM2712/RP1 U-Boot + NVMe, rpi_generic) |
 | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION}\` |
 | util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${UTIL_VERSION}\` |
