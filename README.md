@@ -2,6 +2,7 @@
 
 [![Build and Publish](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/publish.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/publish.yml)
 [![Build Kernel](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-kernel.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-kernel.yml)
+[![Build Overlay](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-overlay.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-overlay.yml)
 
 Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM4, CM5, and Pi 5** on CM4IO/CM5IO-compatible carrier boards (e.g. DeskPi Super6C).
 
