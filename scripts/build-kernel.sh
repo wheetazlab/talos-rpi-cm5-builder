@@ -20,6 +20,19 @@
 
 set -euo pipefail
 
+# pkgs Makefile uses GNU make (export define) and GNU sed (-r, Q command).
+# macOS ships BSD versions — install GNU tools via brew and shadow them.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if ! command -v brew &>/dev/null; then
+    echo "ERROR: Homebrew required on macOS. Install from https://brew.sh" >&2
+    exit 1
+  fi
+  brew install make gnu-sed docker-buildx
+  export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix gnu-sed)/libexec/gnubin:${PATH}"
+  mkdir -p ~/.docker/cli-plugins
+  ln -sf "$(brew --prefix docker-buildx)/bin/docker-buildx" ~/.docker/cli-plugins/docker-buildx
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
