@@ -20,10 +20,14 @@ on:
         description: 'Tag for the overlay image (e.g. pr88, pr88-2, latest)'
         required: false
         default: 'pr88'
+      runner:
+        description: 'GitHub Actions runner (e.g. ubuntu-24.04-arm, mac-runner)'
+        required: false
+        default: 'ubuntu-24.04-arm'
 
 jobs:
   build-overlay:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
     permissions:
       contents: read
       packages: write
