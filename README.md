@@ -102,7 +102,7 @@ Builds the custom installer-base OCI image that `publish.yml` consumes. Run this
 | Input | Default | Description |
 |-------|---------|-------------|
 | `talos_version` | `v1.12.7` | Talos branch to build |
-| `pkg_version` | `v1.12.0` | `siderolabs/pkgs` branch/tag |
+| `pkg_version` | `v1.12.0-58-g86d6af1` | `siderolabs/pkgs` ref (branch, tag, or git-describe) |
 | `installer_tag` | `v1.12.7-k-macb` | Output image tag |
 
 Also triggers on push of a `v*-kernel` tag (e.g. `v1.12.7-kernel`).
@@ -232,7 +232,7 @@ Override defaults with env vars or flags:
 
 ```bash
 # build-kernel.sh options
-GHCR_ORG=myorg TALOS_VERSION=v1.12.7 PKG_VERSION=v1.12.0 INSTALLER_TAG=v1.12.7-k-macb \
+GHCR_ORG=myorg TALOS_VERSION=v1.12.7 PKG_VERSION=v1.12.0-58-g86d6af1 INSTALLER_TAG=v1.12.7-k-macb \
   ./scripts/build-kernel.sh
 
 # build-overlay.sh options

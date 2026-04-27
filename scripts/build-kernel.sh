@@ -15,7 +15,7 @@
 #
 # Examples:
 #   ./scripts/build-kernel.sh
-#   ./scripts/build-kernel.sh --talos v1.12.7 --pkg-version v1.12.0 --tag v1.12.7-k-macb
+#   ./scripts/build-kernel.sh --talos v1.12.7 --pkg-version v1.12.0-58-g86d6af1 --tag v1.12.7-k-macb
 # ------------------------------------------------------------------------------
 
 set -euo pipefail
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 TALOS_VERSION="${TALOS_VERSION:-v1.12.7}"
-PKG_VERSION="${PKG_VERSION:-v1.12.0}"
+PKG_VERSION="${PKG_VERSION:-v1.12.0-58-g86d6af1}"
 INSTALLER_TAG="${INSTALLER_TAG:-${TALOS_VERSION}-k-macb}"
 GHCR_ORG="${GHCR_ORG:-wheetazlab}"
 REGISTRY="ghcr.io"
@@ -84,9 +84,13 @@ mkdir -p "${CHECKOUTS_DIR}"
 
 echo "==> Cloning siderolabs/pkgs @ ${PKG_VERSION}..."
 rm -rf "${CHECKOUTS_DIR}/pkgs"
-git clone -c advice.detachedHead=false \
-  --branch "${PKG_VERSION}" \
-  https://github.com/siderolabs/pkgs.git "${CHECKOUTS_DIR}/pkgs"
+git clone https://github.com/siderolabs/pkgs.git "${CHECKOUTS_DIR}/pkgs"
+# Resolve git-describe refs (e.g. v1.12.0-58-g86d6af1 → 86d6af1)
+PKGS_CHECKOUT="${PKG_VERSION}"
+if [[ "${PKGS_CHECKOUT}" =~ -[0-9]+-g([0-9a-f]+)$ ]]; then
+  PKGS_CHECKOUT="${BASH_REMATCH[1]}"
+fi
+git -C "${CHECKOUTS_DIR}/pkgs" -c advice.detachedHead=false checkout "${PKGS_CHECKOUT}"
 
 echo ""
 echo "==> Copying macb patches into pkgs..."

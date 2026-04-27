@@ -22,9 +22,9 @@ on:
         required: false
         default: 'v1.12.7'
       pkg_version:
-        description: 'siderolabs/pkgs branch/tag (e.g. v1.12.0)'
+        description: 'siderolabs/pkgs ref — branch, tag, or git-describe (e.g. v1.12.0-58-g86d6af1)'
         required: false
-        default: 'v1.12.0'
+        default: 'v1.12.0-58-g86d6af1'
       installer_tag:
         description: 'Output image tag (e.g. v1.12.7-k-macb)'
         required: false
@@ -74,7 +74,7 @@ jobs:
             # Tag format: v1.12.7-kernel → extract v1.12.7
             TAG="${{ github.ref_name }}"
             TALOS_VERSION=$(echo "$TAG" | grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+')
-            PKG_VERSION="v1.12.0"
+            PKG_VERSION="v1.12.0-58-g86d6af1"
             INSTALLER_TAG="${TALOS_VERSION}-k-macb"
           else
             TALOS_VERSION="${{ github.event.inputs.talos_version }}"
@@ -90,9 +90,11 @@ jobs:
 
       - name: Clone siderolabs/pkgs
         run: |
-          git clone -c advice.detachedHead=false \
-            --branch "${{ steps.ver.outputs.pkg_version }}" \
-            https://github.com/siderolabs/pkgs.git checkouts/pkgs
+          git clone https://github.com/siderolabs/pkgs.git checkouts/pkgs
+          # Resolve git-describe refs (e.g. v1.12.0-58-g86d6af1 → 86d6af1)
+          PKG_REF="${{ steps.ver.outputs.pkg_version }}"
+          [[ "$PKG_REF" =~ -[0-9]+-g([0-9a-f]+)$ ]] && PKG_REF="${BASH_REMATCH[1]}"
+          git -C checkouts/pkgs -c advice.detachedHead=false checkout "$PKG_REF"
 
       - name: Copy macb kernel patches into pkgs
         run: |
