@@ -8,7 +8,7 @@ Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM
 
 Builds a single `rpi_generic` image that works across CM4, CM5, and Pi 5 boards.
 
-The build pipeline is fully self-contained — the kernel (`ghcr.io/wheetazlab/rpi-talos`) is built from source via `build-kernel.yml`, with three macb ethernet patches applied on top of the Pi Foundation vendor kernel. The disk image is assembled by `publish.yml` using that kernel image plus a custom `sbc-raspberrypi` overlay (full BCM2712/RP1 U-Boot with NVMe/PCIe support, unified `rpi_generic` installer), `iscsi-tools`, and `util-linux-tools`.
+The build pipeline is fully self-contained — the kernel (`ghcr.io/wheetazlab/rpi-talos`) is built from source via `build-kernel.yml`, using the standard `siderolabs/pkgs` kernel with three macb ethernet patches applied on top. The disk image is assembled by `publish.yml` using that kernel image plus a custom `sbc-raspberrypi` overlay (full BCM2712/RP1 U-Boot with NVMe/PCIe support, unified `rpi_generic` installer), `iscsi-tools`, and `util-linux-tools`.
 
 ## Background
 
@@ -20,7 +20,7 @@ Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/is
 
 ### macb kernel patches
 
-Three patches are applied to the Pi Foundation vendor kernel (`patches/linux/`) to fix silent TX stall issues on PCIe-attached macb ethernet (BCM2712/RP1):
+Three patches are applied to the standard Talos kernel (`patches/linux/`) to fix silent TX stall issues on PCIe-attached macb ethernet (BCM2712/RP1):
 
 | Patch | Fix |
 |-------|-----|
@@ -28,7 +28,7 @@ Three patches are applied to the Pi Foundation vendor kernel (`patches/linux/`) 
 | `0002` | Re-check ISR after IER re-enable in `macb_tx_poll` |
 | `0003` | TX stall watchdog — defence-in-depth per-queue `delayed_work` |
 
-These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [cilium#43198](https://github.com/cilium/cilium/issues/43198).
+These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198). @smira (siderolabs) confirmed they will accept a PR to `pkgs/` once the macb patches land in a stable kernel release.
 
 ---
 
@@ -67,11 +67,11 @@ Flash Raspberry Pi OS to an SD card, boot from it once (this automatically updat
 | Component             | Version / Image |
 |-----------------------|----------------|
 | Talos Linux           | `v1.12.7`      |
-| Linux kernel          | `6.18.24` (Pi Foundation vendor kernel, `rpi-6.18.y` branch) |
+| Linux kernel          | standard `siderolabs/pkgs` mainline kernel + 3 macb patches |
 | SBC overlay           | `ghcr.io/wheetazlab/sbc-raspberrypi:pr88` (PR #88 — BCM2712/RP1 U-Boot + NVMe) |
 | iscsi-tools extension | `v0.2.0`       |
 | util-linux-tools      | `2.41.2`       |
-| Installer base        | `ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-6.18.24-macb` (built by `build-kernel.yml`) |
+| Installer base        | `ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb` (built by `build-kernel.yml`) |
 
 All versions are configurable — see [Customization](#customization).
 
@@ -85,15 +85,15 @@ All workflow files use `github.repository_owner` for all GHCR paths — they are
 
 ### Build Patched Kernel (`build-kernel.yml`)
 
-Builds the custom installer-base OCI image that `publish.yml` consumes. Run this first whenever you bump Talos or want to update the kernel/macb patches.
+Builds the custom installer-base OCI image that `publish.yml` consumes. Run this first whenever you bump Talos or want to update the macb patches.
 
 **Pipeline:**
-1. Clones `siderolabs/pkgs` at `PKG_VERSION`, applies the Pi Foundation vendor kernel patch (`patches/siderolabs/pkgs/`)
+1. Clones `siderolabs/pkgs` at `PKG_VERSION` (standard upstream kernel, no vendor fork)
 2. Copies `patches/linux/*.patch` (3 macb patches) into the pkgs kernel patch directory
 3. Builds and pushes `ghcr.io/<owner>/kernel:<pkgs-tag>`
 4. Clones `siderolabs/talos`, applies `patches/siderolabs/talos/` patches
-5. Builds and pushes `installer-base` with the custom kernel
-6. `crane copy`s to `ghcr.io/<owner>/rpi-talos:<installer_tag>` (e.g. `v1.12.7-k-6.18.24-macb`)
+5. Builds and pushes `installer-base` with the macb-patched kernel
+6. `crane copy`s to `ghcr.io/<owner>/rpi-talos:<installer_tag>` (e.g. `v1.12.7-k-macb`)
 
 **Trigger:** Actions → Build Patched Kernel Installer Base → Run workflow
 
@@ -103,7 +103,7 @@ Builds the custom installer-base OCI image that `publish.yml` consumes. Run this
 |-------|---------|-------------|
 | `talos_version` | `v1.12.7` | Talos branch to build |
 | `pkg_version` | `v1.12.0` | `siderolabs/pkgs` branch/tag |
-| `installer_tag` | `v1.12.7-k-6.18.24-macb` | Output image tag |
+| `installer_tag` | `v1.12.7-k-macb` | Output image tag |
 
 Also triggers on push of a `v*-kernel` tag (e.g. `v1.12.7-kernel`).
 
@@ -289,7 +289,7 @@ make help           Show all targets and version variables
 
 ### What's in the image?
 
-- Talos Linux kernel + initramfs (arm64) — from `ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-6.18.24-macb` (Pi Foundation vendor kernel `rpi-6.18.y`, built by `build-kernel.yml` with 3 macb patches applied)
+- Talos Linux kernel + initramfs (arm64) — from `ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb` (standard `siderolabs/pkgs` mainline kernel, built by `build-kernel.yml` with 3 macb patches applied)
 - **Patched U-Boot** (BCM2712/RP1) from `ghcr.io/wheetazlab/sbc-raspberrypi:pr88` (PR #88 patch set — NVMe/PCIe, EEE LPI, MACB driver)
 - DTBs from custom `sbc-raspberrypi` overlay (`rpi_generic` installer):
   - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)
@@ -327,7 +327,7 @@ talosctl kubeconfig --nodes <CONTROLPLANE_IP> --talosconfig talosconfig
 To upgrade an existing node:
 
 ```bash
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.7-rpi-kernel
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.7-k-macb
 ```
 
 ---
