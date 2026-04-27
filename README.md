@@ -90,9 +90,9 @@ Builds the custom installer-base OCI image that `publish.yml` consumes. Run this
 **Pipeline:**
 1. Clones `siderolabs/pkgs` at `PKG_VERSION` (standard upstream kernel, no vendor fork)
 2. Copies `patches/linux/*.patch` (3 macb patches) into the pkgs kernel patch directory
-3. Builds and pushes `ghcr.io/<owner>/kernel:<pkgs-tag>`
-4. Clones `siderolabs/talos`, applies `patches/siderolabs/talos/` patches
-5. Builds and pushes `installer-base` with the macb-patched kernel
+3. Builds and pushes `ghcr.io/<owner>/kernel:<pkgs-tag>` using pkgs' native patch-and-build
+4. Clones `siderolabs/talos` at `talos_version` (unmodified — no patches needed)
+5. Builds and pushes `installer-base` with `PKG_KERNEL=` pointing to the macb-patched kernel OCI
 6. `crane copy`s to `ghcr.io/<owner>/rpi-talos:<installer_tag>` (e.g. `v1.12.7-k-macb`)
 
 **Trigger:** Actions → Build Patched Kernel Installer Base → Run workflow

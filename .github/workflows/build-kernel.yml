@@ -114,31 +114,13 @@ jobs:
         run: |
           echo "tag=$(cd checkouts/pkgs && git describe --tag --always --dirty --match 'v[0-9]*')" >> "$GITHUB_OUTPUT"
 
-      # ── siderolabs/talos: installer-base with custom kernel ───────────────
+      # ── siderolabs/talos: installer-base with macb-patched kernel ────────────
 
       - name: Clone siderolabs/talos
         run: |
           git clone -c advice.detachedHead=false \
             --branch "${{ steps.ver.outputs.talos_version }}" \
             https://github.com/siderolabs/talos.git checkouts/talos
-
-      - name: Apply Talos Pi5 patches
-        run: |
-          cd checkouts/talos
-          git am "$GITHUB_WORKSPACE/patches/siderolabs/talos/0001-Patched-for-Raspberry-Pi-5.patch"
-          git am "$GITHUB_WORKSPACE/patches/siderolabs/talos/0002-Makefile.patch"
-
-      - name: Build initramfs + kernel (Talos, artifacts only)
-        run: |
-          cd checkouts/talos
-          make \
-            TAG=${{ steps.ver.outputs.talos_version }} \
-            REGISTRY=${{ env.REGISTRY }} \
-            USERNAME=${{ env.REGISTRY_USERNAME }} \
-            PKG_KERNEL=${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }} \
-            INSTALLER_ARCH=arm64 \
-            PLATFORM=linux/arm64 \
-            initramfs kernel
 
       - name: Build and push installer-base
         run: |
