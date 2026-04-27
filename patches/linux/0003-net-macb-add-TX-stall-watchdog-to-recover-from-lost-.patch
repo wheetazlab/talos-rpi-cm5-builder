@@ -46,10 +46,9 @@ Signed-off-by: Lukasz Raczylo <lukasz@raczylo.com>
 diff --git a/drivers/net/ethernet/cadence/macb.h b/drivers/net/ethernet/cadence/macb.h
 --- a/drivers/net/ethernet/cadence/macb.h
 +++ b/drivers/net/ethernet/cadence/macb.h
-@@ -1294,6 +1294,11 @@
+@@ -1228,5 +1228,10 @@
  	struct work_struct	tx_error_task;
  	bool			txubr_pending;
- 	bool			tx_pending;
 +
 +	/* TX stall watchdog -- see macb_tx_stall_watchdog() in macb_main.c */
 +	struct delayed_work	tx_stall_watchdog_work;
