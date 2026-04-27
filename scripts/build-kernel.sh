@@ -112,7 +112,7 @@ echo ""
 echo "==> Building kernel OCI (this takes a while)..."
 cd "${CHECKOUTS_DIR}/pkgs"
 BUILD_CMD="docker buildx build"
-[[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman build"
+[[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman buildx build"
 make \
   BUILD="${BUILD_CMD}" \
   REGISTRY="${REGISTRY}" \

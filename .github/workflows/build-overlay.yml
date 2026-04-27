@@ -61,7 +61,7 @@ jobs:
         run: |
           cd sbc-raspberrypi
           BUILD_CMD="docker buildx build"
-          [[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman build"
+          [[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman buildx build"
           make sbc-raspberrypi \
             BUILD="${BUILD_CMD}" \
             REGISTRY=ghcr.io \

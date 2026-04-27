@@ -117,7 +117,7 @@ jobs:
         run: |
           cd checkouts/pkgs
           BUILD_CMD="docker buildx build"
-          [[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman build"
+          [[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman buildx build"
           make \
             BUILD="${BUILD_CMD}" \
             REGISTRY=${{ env.REGISTRY }} \
