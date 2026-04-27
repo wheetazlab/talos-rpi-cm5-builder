@@ -61,7 +61,11 @@ jobs:
         run: |
           cd sbc-raspberrypi
           BUILD_CMD="docker buildx build"
-          [[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman buildx build"
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            BUILD_CMD="podman build"
+            # --provenance is a BuildKit-only flag; podman build rejects it
+            sed -i '/--provenance/d' Makefile
+          fi
           make sbc-raspberrypi \
             BUILD="${BUILD_CMD}" \
             REGISTRY=ghcr.io \

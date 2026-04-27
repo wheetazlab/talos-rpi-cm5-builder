@@ -112,7 +112,11 @@ echo ""
 echo "==> Building kernel OCI (this takes a while)..."
 cd "${CHECKOUTS_DIR}/pkgs"
 BUILD_CMD="docker buildx build"
-[[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman buildx build"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  BUILD_CMD="podman build"
+  # --provenance is a BuildKit-only flag; podman build rejects it
+  sed -i '/--provenance/d' Makefile
+fi
 make \
   BUILD="${BUILD_CMD}" \
   REGISTRY="${REGISTRY}" \
