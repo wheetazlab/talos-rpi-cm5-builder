@@ -20,25 +20,6 @@
 
 set -euo pipefail
 
-# pkgs Makefile uses GNU make (export define) and GNU sed (-r, Q command).
-# macOS ships BSD versions. Also bridge docker CLI → podman socket so that
-# docker buildx build (required for bldr/Pkgfile BuildKit frontend) works.
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  if ! command -v brew &>/dev/null; then
-    echo "ERROR: Homebrew required on macOS. Install from https://brew.sh" >&2
-    exit 1
-  fi
-  brew install make gnu-sed docker docker-buildx
-  export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix gnu-sed)/libexec/gnubin:${PATH}"
-  mkdir -p ~/.docker/cli-plugins
-  ln -sfn "$(brew --prefix docker-buildx)/bin/docker-buildx" \
-    ~/.docker/cli-plugins/docker-buildx
-  PODMAN_SOCK="$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')"
-  export DOCKER_HOST="unix://${PODMAN_SOCK}"
-  docker buildx create --name podman-builder --driver docker-container --use 2>/dev/null || \
-    docker buildx use podman-builder
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 

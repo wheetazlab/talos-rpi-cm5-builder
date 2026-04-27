@@ -20,38 +20,16 @@ on:
         description: 'Tag for the overlay image (e.g. pr88, pr88-2, latest)'
         required: false
         default: 'pr88'
-      runner:
-        description: 'GitHub Actions runner (e.g. ubuntu-24.04-arm, mac-runner)'
-        required: false
-        default: 'ubuntu-24.04-arm'
 
 jobs:
   build-overlay:
-    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
     steps:
       - name: Set up Docker Buildx
-        if: runner.os == 'Linux'
         uses: docker/setup-buildx-action@v3
-
-      - name: Set up macOS build environment
-        if: runner.os == 'macOS'
-        run: |
-          # sbc-raspberrypi Makefile requires GNU make/sed (BSD versions incompatible)
-          brew install make gnu-sed docker docker-buildx
-          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
-          echo "$(brew --prefix gnu-sed)/libexec/gnubin" >> "$GITHUB_PATH"
-          # Bridge docker CLI → Podman socket so docker buildx build works
-          mkdir -p ~/.docker/cli-plugins
-          ln -sfn "$(brew --prefix docker-buildx)/bin/docker-buildx" \
-            ~/.docker/cli-plugins/docker-buildx
-          PODMAN_SOCK="$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')"
-          echo "DOCKER_HOST=unix://${PODMAN_SOCK}" >> "$GITHUB_ENV"
-          # Create a buildkitd-backed builder running inside the podman VM
-          DOCKER_HOST="unix://${PODMAN_SOCK}" docker buildx create \
-            --name podman-builder --driver docker-container --use
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
