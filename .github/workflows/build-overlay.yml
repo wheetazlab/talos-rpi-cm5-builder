@@ -33,6 +33,11 @@ jobs:
       packages: write
     steps:
       - name: Set up Docker Buildx
+        if: "!contains(runner.name, 'mac')"
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Docker Buildx (Podman)
+        if: contains(runner.name, 'mac')
         uses: docker/setup-buildx-action@v3
         with:
           driver: podman
