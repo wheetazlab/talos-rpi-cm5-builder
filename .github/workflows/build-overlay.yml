@@ -62,9 +62,10 @@ jobs:
           cd sbc-raspberrypi
           BUILD_CMD="docker buildx build"
           if [[ "$(uname -s)" == "Darwin" ]]; then
-            BUILD_CMD="podman buildx build"
-            # --provenance is not supported by podman buildx build; strip it
+            BUILD_CMD="podman build"
+            # Strip BuildKit-only flags podman build does not support
             sed -i '/--provenance/d' Makefile
+            sed -i 's/ --push=$(PUSH)//' Makefile
           fi
           make sbc-raspberrypi \
             BUILD="${BUILD_CMD}" \
@@ -73,6 +74,10 @@ jobs:
             TAG=${{ github.event.inputs.overlay_tag }} \
             PLATFORM=linux/arm64 \
             PUSH=true
+          # macOS: --push stripped from Makefile; push manually
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            podman push "ghcr.io/${{ github.repository_owner }}/sbc-raspberrypi:${{ github.event.inputs.overlay_tag }}"
+          fi
 
       - name: Summary
         run: |

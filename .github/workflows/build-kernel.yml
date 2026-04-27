@@ -118,9 +118,10 @@ jobs:
           cd checkouts/pkgs
           BUILD_CMD="docker buildx build"
           if [[ "$(uname -s)" == "Darwin" ]]; then
-            BUILD_CMD="podman buildx build"
-            # --provenance is not supported by podman buildx build; strip it
+            BUILD_CMD="podman build"
+            # Strip BuildKit-only flags podman build does not support
             sed -i '/--provenance/d' Makefile
+            sed -i 's/ --push=$(PUSH)//' Makefile
           fi
           make \
             BUILD="${BUILD_CMD}" \
@@ -129,6 +130,11 @@ jobs:
             PUSH=true \
             PLATFORM=linux/arm64 \
             kernel
+          # macOS: --push stripped from Makefile; push manually
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            PKGS_TAG="$(git describe --tag --always --dirty --match 'v[0-9]*')"
+            podman push "${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${PKGS_TAG}"
+          fi
 
       - name: Get pkgs tag
         id: pkgs

@@ -113,9 +113,10 @@ echo "==> Building kernel OCI (this takes a while)..."
 cd "${CHECKOUTS_DIR}/pkgs"
 BUILD_CMD="docker buildx build"
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  BUILD_CMD="podman buildx build"
-  # --provenance is not supported by podman buildx build; strip it
+  BUILD_CMD="podman build"
+  # Strip BuildKit-only flags podman build does not support
   sed -i '/--provenance/d' Makefile
+  sed -i 's/ --push=$(PUSH)//' Makefile
 fi
 make \
   BUILD="${BUILD_CMD}" \
@@ -127,6 +128,12 @@ make \
 
 PKGS_TAG="$(git describe --tag --always --dirty --match 'v[0-9]*')"
 KERNEL_IMAGE="${REGISTRY}/${GHCR_ORG}/kernel:${PKGS_TAG}"
+# macOS: --push was stripped from Makefile; push manually
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  echo ""
+  echo "==> Pushing kernel OCI (macOS manual push)..."
+  podman push "${KERNEL_IMAGE}"
+fi
 echo ""
 echo "==> Kernel OCI pushed: ${KERNEL_IMAGE}"
 
