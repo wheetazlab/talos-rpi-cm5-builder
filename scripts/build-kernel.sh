@@ -21,14 +21,22 @@
 set -euo pipefail
 
 # pkgs Makefile uses GNU make (export define) and GNU sed (-r, Q command).
-# macOS ships BSD versions — install GNU tools via brew and shadow them.
+# macOS ships BSD versions. Also bridge docker CLI → podman socket so that
+# docker buildx build (required for bldr/Pkgfile BuildKit frontend) works.
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if ! command -v brew &>/dev/null; then
     echo "ERROR: Homebrew required on macOS. Install from https://brew.sh" >&2
     exit 1
   fi
-  brew install make gnu-sed
+  brew install make gnu-sed docker docker-buildx
   export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix gnu-sed)/libexec/gnubin:${PATH}"
+  mkdir -p ~/.docker/cli-plugins
+  ln -sfn "$(brew --prefix docker-buildx)/bin/docker-buildx" \
+    ~/.docker/cli-plugins/docker-buildx
+  PODMAN_SOCK="$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')"
+  export DOCKER_HOST="unix://${PODMAN_SOCK}"
+  docker buildx create --name podman-builder --driver docker-container --use 2>/dev/null || \
+    docker buildx use podman-builder
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -111,15 +119,7 @@ cp -v "${REPO_ROOT}/patches/linux/"*.patch "${CHECKOUTS_DIR}/pkgs/kernel/build/p
 echo ""
 echo "==> Building kernel OCI (this takes a while)..."
 cd "${CHECKOUTS_DIR}/pkgs"
-BUILD_CMD="docker buildx build"
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  BUILD_CMD="podman build"
-  # Strip BuildKit-only flags podman build does not support
-  sed -i '/--provenance/d' Makefile
-  sed -i 's/ --push=$(PUSH)//' Makefile
-fi
 make \
-  BUILD="${BUILD_CMD}" \
   REGISTRY="${REGISTRY}" \
   USERNAME="${GHCR_ORG}" \
   PUSH=true \
@@ -128,12 +128,6 @@ make \
 
 PKGS_TAG="$(git describe --tag --always --dirty --match 'v[0-9]*')"
 KERNEL_IMAGE="${REGISTRY}/${GHCR_ORG}/kernel:${PKGS_TAG}"
-# macOS: --push was stripped from Makefile; push manually
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  echo ""
-  echo "==> Pushing kernel OCI (macOS manual push)..."
-  podman push "${KERNEL_IMAGE}"
-fi
 echo ""
 echo "==> Kernel OCI pushed: ${KERNEL_IMAGE}"
 
