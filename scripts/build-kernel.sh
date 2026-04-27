@@ -27,10 +27,8 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     echo "ERROR: Homebrew required on macOS. Install from https://brew.sh" >&2
     exit 1
   fi
-  brew install make gnu-sed docker-buildx
+  brew install make gnu-sed
   export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix gnu-sed)/libexec/gnubin:${PATH}"
-  mkdir -p ~/.docker/cli-plugins
-  ln -sf "$(brew --prefix docker-buildx)/bin/docker-buildx" ~/.docker/cli-plugins/docker-buildx
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -113,7 +111,10 @@ cp -v "${REPO_ROOT}/patches/linux/"*.patch "${CHECKOUTS_DIR}/pkgs/kernel/build/p
 echo ""
 echo "==> Building kernel OCI (this takes a while)..."
 cd "${CHECKOUTS_DIR}/pkgs"
+BUILD_CMD="docker buildx build"
+[[ "$(uname -s)" == "Darwin" ]] && BUILD_CMD="podman build"
 make \
+  BUILD="${BUILD_CMD}" \
   REGISTRY="${REGISTRY}" \
   USERNAME="${GHCR_ORG}" \
   PUSH=true \
