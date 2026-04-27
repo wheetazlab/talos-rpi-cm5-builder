@@ -212,6 +212,39 @@ make flash-sd DISK=/dev/rdisk4
 
 ## Local Build
 
+### Prerequisites: build kernel + overlay first
+
+`build.sh` / `make build` pull `rpi-talos` and `sbc-raspberrypi` from GHCR. If you haven't pushed them yet (or want to rebuild with new patches), run the local build scripts first:
+
+```bash
+# 1. Build macb-patched kernel + installer-base → ghcr.io/<org>/rpi-talos:<tag>
+./scripts/build-kernel.sh
+
+# 2. Build sbc-raspberrypi overlay → ghcr.io/<org>/sbc-raspberrypi:pr88
+./scripts/build-overlay.sh
+```
+
+Both scripts require:
+- Docker or Podman **logged in** to GHCR (`docker login ghcr.io -u <user>`)
+- `crane` installed (`brew install crane` or `go install github.com/google/go-containerregistry/cmd/crane@latest`)
+
+Override defaults with env vars or flags:
+
+```bash
+# build-kernel.sh options
+GHCR_ORG=myorg TALOS_VERSION=v1.12.7 PKG_VERSION=v1.12.0 INSTALLER_TAG=v1.12.7-k-macb \
+  ./scripts/build-kernel.sh
+
+# build-overlay.sh options
+GHCR_ORG=myorg OVERLAY_TAG=pr88 ./scripts/build-overlay.sh
+
+# Both scripts accept --help for full option list
+./scripts/build-kernel.sh --help
+./scripts/build-overlay.sh --help
+```
+
+### Build disk image (after kernel+overlay are in GHCR)
+
 ```bash
 # Full pipeline (build image + installer + push + release)
 make publish
