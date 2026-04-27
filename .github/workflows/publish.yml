@@ -7,9 +7,22 @@ on:
   workflow_dispatch:
     inputs:
       talos_version:
-        description: 'Base Talos version (e.g. v1.12.6)'
+        description: 'Base Talos version (e.g. v1.12.7)'
         required: false
         default: ''
+      extra_kernel_args:
+        description: 'Extra kernel args — space-separated key=value pairs (e.g. cma=256M hugepages=64)'
+        required: false
+        default: ''
+      extra_extensions:
+        description: 'Extra extension images on top of defaults (space-separated image:tag refs)'
+        required: false
+        default: ''
+
+env:
+  # Default extensions baked into the installer — resolved to digests at build time
+  EXTENSION_ISCSI_IMAGE: ghcr.io/siderolabs/iscsi-tools:v0.2.0
+  EXTENSION_UTIL_LINUX_IMAGE: ghcr.io/siderolabs/util-linux-tools:2.41.2
 
 jobs:
   # ── Resolve the Talos version once and share it across all jobs ─────────────
@@ -23,6 +36,8 @@ jobs:
       linux_kernel_version: ${{ steps.version.outputs.linux_kernel_version }}
       iscsi_version: ${{ steps.version.outputs.iscsi_version }}
       util_version: ${{ steps.version.outputs.util_version }}
+      extra_kernel_args: ${{ steps.version.outputs.extra_kernel_args }}
+      extra_extensions: ${{ steps.version.outputs.extra_extensions }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,6 +64,8 @@ jobs:
           echo "installer_base=${INSTALLER_BASE}" >> "$GITHUB_OUTPUT"
           echo "iscsi_version=${ISCSI}" >> "$GITHUB_OUTPUT"
           echo "util_version=${UTIL}" >> "$GITHUB_OUTPUT"
+          echo "extra_kernel_args=${{ github.event.inputs.extra_kernel_args }}" >> "$GITHUB_OUTPUT"
+          echo "extra_extensions=${{ github.event.inputs.extra_extensions }}" >> "$GITHUB_OUTPUT"
 
 
   # ── Build image + installer ────────────────────────────────────────────────────────────────────└
@@ -68,17 +85,63 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up crane
+        uses: imjasonh/setup-crane@v0.4
+        with:
+          version: v0.20.5
+
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
 
       - name: Install dependencies
         run: sudo apt-get install -y xz-utils
 
+      - name: Resolve extension digests
+        id: extensions
+        env:
+          EXTRA_EXTENSIONS: ${{ needs.resolve-version.outputs.extra_extensions }}
+        run: |
+          RESOLVED=""
+          for IMAGE in ${EXTENSION_ISCSI_IMAGE} ${EXTENSION_UTIL_LINUX_IMAGE} ${EXTRA_EXTENSIONS}; do
+            DIGEST=$(crane digest "${IMAGE}")
+            RESOLVED="${RESOLVED} ${IMAGE}@${DIGEST}"
+          done
+          echo "list=${RESOLVED# }" >> "$GITHUB_OUTPUT"
+
+      - name: Build kernel-arg flags
+        id: kargs
+        env:
+          EXTRA_KARGS: ${{ needs.resolve-version.outputs.extra_kernel_args }}
+        run: |
+          FLAGS=""
+          for arg in ${EXTRA_KARGS}; do
+            FLAGS="${FLAGS} --extra-kernel-arg=${arg}"
+          done
+          echo "flags=${FLAGS# }" >> "$GITHUB_OUTPUT"
+
       - name: Build Talos image
-        run: make build TALOS_VERSION=${{ env.TALOS_VERSION }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }}
+        env:
+          EXTENSIONS: ${{ steps.extensions.outputs.list }}
+          EXTRA_KERNEL_ARGS: ${{ steps.kargs.outputs.flags }}
+        run: |
+          make build \
+            TALOS_VERSION=${{ env.TALOS_VERSION }} \
+            CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} \
+            CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }} \
+            EXTENSIONS="${EXTENSIONS}" \
+            EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS}"
 
       - name: Build installer
-        run: make installer TALOS_VERSION=${{ env.TALOS_VERSION }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }}
+        env:
+          EXTENSIONS: ${{ steps.extensions.outputs.list }}
+          EXTRA_KERNEL_ARGS: ${{ steps.kargs.outputs.flags }}
+        run: |
+          make installer \
+            TALOS_VERSION=${{ env.TALOS_VERSION }} \
+            CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} \
+            CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }} \
+            EXTENSIONS="${EXTENSIONS}" \
+            EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS}"
 
       - name: Push installer to GHCR
         run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }}

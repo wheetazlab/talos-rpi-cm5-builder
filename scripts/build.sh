@@ -24,6 +24,10 @@ OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)/_out"
 DISK=""
 CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-6.18.24-macb}"
 CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE:-ghcr.io/wheetazlab/sbc-raspberrypi:pr88}"
+# Extra extension images appended on top of defaults (--extension adds to this)
+EXTRA_EXTENSION_IMAGES=()
+# Extra kernel args accumulated via --kernel-arg KEY=VALUE
+EXTRA_KERNEL_ARG_FLAGS=()
 
 # --- Arg parsing ---------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -35,10 +39,14 @@ while [[ $# -gt 0 ]]; do
     --disk)               DISK="$2";                   shift 2 ;;
     --docker)             DOCKER="$2";                 shift 2 ;;
     --custom-installer)   CUSTOM_INSTALLER_BASE="$2";  shift 2 ;;
+    --extension)          EXTRA_EXTENSION_IMAGES+=("$2"); shift 2 ;;
+    --kernel-arg)         EXTRA_KERNEL_ARG_FLAGS+=("--extra-kernel-arg=$2"); shift 2 ;;
     --help|-h)
       echo "Usage: $0 [--talos VERSION] [--overlay IMAGE] [--iscsi VERSION] [--util-linux VERSION]"
       echo "       [--disk /dev/rdiskN] [--docker podman|docker]"
       echo "       [--custom-installer IMAGE]"
+      echo "       [--extension IMAGE]     (repeatable; adds extension on top of defaults)"
+      echo "       [--kernel-arg KEY=VAL]  (repeatable; e.g. --kernel-arg cma=256M)"
       echo ""
       echo "Installer base override:"
       echo "  --custom-installer  ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-6.18.24-macb"
@@ -56,6 +64,20 @@ ISCSI_TOOLS_IMAGE="ghcr.io/siderolabs/iscsi-tools:${ISCSI_TOOLS_VERSION}"
 UTIL_LINUX_IMAGE="ghcr.io/siderolabs/util-linux-tools:${UTIL_LINUX_VERSION}"
 RAW_IMAGE="${OUT_DIR}/metal-${ARCH}.raw"
 
+# --- Build extension and kernel-arg arrays ------------------------------------
+# If EXTENSIONS env var is set externally (e.g. from CI with digest-pinned refs),
+# use it as the base. Otherwise default to iscsi-tools + util-linux-tools.
+if [[ -n "${EXTENSIONS:-}" ]]; then
+  read -ra _BASE_EXTS <<< "${EXTENSIONS}"
+else
+  _BASE_EXTS=("${ISCSI_TOOLS_IMAGE}" "${UTIL_LINUX_IMAGE}")
+fi
+ALL_EXTENSIONS=("${_BASE_EXTS[@]}" "${EXTRA_EXTENSION_IMAGES[@]}")
+EXTENSION_ARGS=()
+for ext in "${ALL_EXTENSIONS[@]}"; do
+  EXTENSION_ARGS+=("--system-extension-image=${ext}")
+done
+
 # --- Summary -------------------------------------------------------------------
 echo "============================================================"
 echo " Talos RPI CM5 Builder"
@@ -65,6 +87,8 @@ echo " Talos version       : ${TALOS_VERSION}"
 echo " overlay image       : ${OVERLAY_IMAGE}"
 echo " iscsi-tools         : ${ISCSI_TOOLS_VERSION}"
 echo " util-linux-tools    : ${UTIL_LINUX_VERSION}"
+echo " Extensions          : ${ALL_EXTENSIONS[*]}"
+[[ ${#EXTRA_KERNEL_ARG_FLAGS[@]} -gt 0 ]] && echo " Kernel args         : ${EXTRA_KERNEL_ARG_FLAGS[*]}"
 echo " Architecture        : ${ARCH}"
 echo " Output directory    : ${OUT_DIR}"
 echo " Target disk         : ${DISK:-<not set, skipping flash>}"
@@ -80,17 +104,22 @@ echo "==> Pulling imager image..."
 
 echo ""
 echo "==> Building image..."
+IMGARGS=(
+  --base-installer-image="${INSTALLER_BASE}"
+  --overlay-image="${OVERLAY_IMAGE}"
+  --overlay-name="${OVERLAY}"
+  "${EXTENSION_ARGS[@]}"
+)
+for flag in "${EXTRA_KERNEL_ARG_FLAGS[@]}"; do
+  IMGARGS+=("${flag}")
+done
+IMGARGS+=(--arch "${ARCH}")
 "${DOCKER}" run --rm -t \
   -v "${OUT_DIR}:/out" \
   -v /dev:/dev \
   --privileged \
   "${IMAGER_IMAGE}" "${OVERLAY}" \
-  --base-installer-image="${INSTALLER_BASE}" \
-  --overlay-image="${OVERLAY_IMAGE}" \
-  --overlay-name="${OVERLAY}" \
-  --system-extension-image="${ISCSI_TOOLS_IMAGE}" \
-  --system-extension-image="${UTIL_LINUX_IMAGE}" \
-  --arch "${ARCH}"
+  "${IMGARGS[@]}"
 
 echo ""
 echo "==> Build complete!"

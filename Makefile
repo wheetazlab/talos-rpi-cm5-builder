@@ -44,6 +44,13 @@ OVERLAY_IMAGE       := $(CUSTOM_OVERLAY_IMAGE)
 ISCSI_TOOLS_IMAGE   := ghcr.io/siderolabs/iscsi-tools:$(ISCSI_TOOLS_VERSION)
 UTIL_LINUX_IMAGE    := ghcr.io/siderolabs/util-linux-tools:$(UTIL_LINUX_VERSION)
 
+# Extensions — defaults are iscsi-tools + util-linux-tools.
+# Override with EXTENSIONS="img1 img2 ..." for arbitrary/digest-pinned refs.
+# In CI, digest-resolved values are injected by the publish workflow.
+EXTENSIONS          ?= $(ISCSI_TOOLS_IMAGE) $(UTIL_LINUX_IMAGE)
+override EXTENSIONS := $(shell echo "$(EXTENSIONS)")
+EXTENSION_ARGS      := $(foreach ext,$(EXTENSIONS),--system-extension-image=$(ext))
+
 # --- Output files --------------------------------------------------------------
 # NOTE: The Talos imager outputs .raw.xz directly — no separate compress step needed
 XZ_IMAGE          := $(OUT_DIR)/metal-$(ARCH).raw.xz
@@ -66,8 +73,7 @@ build: $(OUT_DIR)
 		--base-installer-image="$(INSTALLER_BASE)" \
 		--overlay-image="$(OVERLAY_IMAGE)" \
 		--overlay-name="$(OVERLAY)" \
-		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
-		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
+		$(EXTENSION_ARGS) \
 		$(EXTRA_KERNEL_ARGS) \
 		--arch $(ARCH)
 	@echo ""
@@ -87,8 +93,7 @@ installer: $(OUT_DIR)
 		--base-installer-image="$(INSTALLER_BASE)" \
 		--overlay-image="$(OVERLAY_IMAGE)" \
 		--overlay-name="$(OVERLAY)" \
-		--system-extension-image="$(ISCSI_TOOLS_IMAGE)" \
-		--system-extension-image="$(UTIL_LINUX_IMAGE)" \
+		$(EXTENSION_ARGS) \
 		$(EXTRA_KERNEL_ARGS) \
 		--arch $(ARCH)
 	@echo "==> Installer image saved to $(INSTALLER_TAR)"
@@ -165,6 +170,8 @@ help:
 	@echo "  TALOS_VERSION         = $(TALOS_VERSION)"
 	@echo "  ISCSI_TOOLS_VERSION   = $(ISCSI_TOOLS_VERSION)"
 	@echo "  UTIL_LINUX_VERSION    = $(UTIL_LINUX_VERSION)"
+	@echo "  EXTENSIONS            = $(EXTENSIONS)"
+	@echo "  EXTRA_KERNEL_ARGS     = $(EXTRA_KERNEL_ARGS)"
 	@echo "  ARCH                  = $(ARCH)"
 	@echo "  DOCKER                = $(DOCKER)"
 	@echo "  GHCR_ORG              = $(GHCR_ORG)"
