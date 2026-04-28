@@ -42,6 +42,7 @@ UBOOT_SHA512="${UBOOT_SHA512:-b1f988a497c77da60faf89ed33034e9ae58c4cd7f208e5ce45
 RPI_DTB_REF="${RPI_DTB_REF:-stable_20250428}"
 RPI_DTB_SHA256="${RPI_DTB_SHA256:-c95906cfbc7808de5860c6d86537bea22e3501f600a5209de59a86cb436886f6}"
 RPI_DTB_SHA512="${RPI_DTB_SHA512:-0ed5d490c491e590b5980dccf6fcac0dd3c47accbfacd40d91507c12801cff34fa6a1c68991c8a6c57bb259c909121414766f35a0b11c4bd5d62c3e11d710839}"
+PI5_SD_POLL_ONCE="${PI5_SD_POLL_ONCE:-true}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,6 +55,7 @@ while [[ $# -gt 0 ]]; do
     --rpi-dtb-ref) RPI_DTB_REF="$2"; shift 2 ;;
     --rpi-dtb-sha256) RPI_DTB_SHA256="$2"; shift 2 ;;
     --rpi-dtb-sha512) RPI_DTB_SHA512="$2"; shift 2 ;;
+    --pi5-sd-poll-once) PI5_SD_POLL_ONCE="$2"; shift 2 ;;
     --help|-h)
       cat <<USAGE
 Usage: $0 [options]
@@ -68,6 +70,7 @@ Options:
   --rpi-dtb-ref REF    raspberrypi/linux ref for DTB packaging (default: ${RPI_DTB_REF})
   --rpi-dtb-sha256 SUM DTB source tarball sha256 (default: ${RPI_DTB_SHA256})
   --rpi-dtb-sha512 SUM DTB source tarball sha512 (default: ${RPI_DTB_SHA512})
+  --pi5-sd-poll-once B Enable dtparam=sd_poll_once for [pi5] (default: ${PI5_SD_POLL_ONCE})
 
 Output image: ghcr.io/<org>/sbc-raspberrypi:<tag>
 USAGE
@@ -88,6 +91,7 @@ echo " Overlay tag      : ${OVERLAY_TAG}"
 echo " GHCR org         : ${GHCR_ORG}"
 echo " U-Boot version   : ${UBOOT_VERSION}"
 echo " DTB ref          : ${RPI_DTB_REF}"
+echo " Pi5 sd_poll_once : ${PI5_SD_POLL_ONCE}"
 echo " Checkouts dir    : ${CHECKOUTS_DIR}"
 echo "============================================================"
 echo ""
@@ -116,6 +120,16 @@ perl -i -pe "s|^(\s*raspberrypi_kernel_version:\s*).*$|\$1${RPI_DTB_REF}|" Pkgfi
 perl -i -pe "s|^(\s*raspberrypi_kernel_sha256:\s*).*$|\$1${RPI_DTB_SHA256}|" Pkgfile
 perl -i -pe "s|^(\s*raspberrypi_kernel_sha512:\s*).*$|\$1${RPI_DTB_SHA512}|" Pkgfile
 perl -i -pe "s|https://github.com/raspberrypi/linux/archive/refs/tags/\{\{ \.raspberrypi_kernel_version \}\}\.tar\.gz|https://github.com/raspberrypi/linux/archive/\{\{ .raspberrypi_kernel_version \}\}\.tar\.gz|g" artifacts/dtb/raspberrypi/pkg.yaml
+
+if [[ "${PI5_SD_POLL_ONCE}" == "true" ]]; then
+  if ! grep -q '^dtparam=sd_poll_once' installers/rpi_generic/src/config.txt; then
+    awk '
+      { print }
+      /^\[pi5\]$/ { print "dtparam=sd_poll_once" }
+    ' installers/rpi_generic/src/config.txt > installers/rpi_generic/src/config.txt.new
+    mv installers/rpi_generic/src/config.txt.new installers/rpi_generic/src/config.txt
+  fi
+fi
 
 # -- Build and push the overlay OCI ------------------------------------------
 
