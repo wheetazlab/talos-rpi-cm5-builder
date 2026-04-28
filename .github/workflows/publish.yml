@@ -235,7 +235,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NOTES=$(cat <<EOF
+          NOTES=$(cat <<'EOF'
           > ⚠️ Experimental build — use at your own risk.
 
           Patched Talos build for **Raspberry Pi CM4, CM5, and Pi 5** boards.
@@ -252,13 +252,13 @@ jobs:
 
           | Component | Version / Image |
           |-----------|------------------|
-          | Talos | \`${{ env.TALOS_VERSION }}\` |
-          | Imager | \`ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}\` |
-          | Installer base | \`${{ env.INSTALLER_BASE }}\` |
+          | Talos | `${{ env.TALOS_VERSION }}` |
+          | Imager | `ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}` |
+          | Installer base | `${{ env.INSTALLER_BASE }}` |
           | Kernel | Linux ${{ env.LINUX_KERNEL_VERSION }} (3× macb PCIe patches) |
-          | SBC overlay | \`${{ env.OVERLAY_IMAGE }}\` (rpi_generic — PR #88) |
-          | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}\` |
-          | util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${{ env.UTIL_VERSION }}\` |
+          | SBC overlay | `${{ env.OVERLAY_IMAGE }}` (rpi_generic — PR #88) |
+          | iscsi-tools | `ghcr.io/siderolabs/iscsi-tools:${{ env.ISCSI_VERSION }}` |
+          | util-linux-tools | `ghcr.io/siderolabs/util-linux-tools:${{ env.UTIL_VERSION }}` |
 
           ### Supported boards
 
@@ -268,19 +268,19 @@ jobs:
 
           ### What's available
 
-          - 📦 **\`metal-arm64.raw.xz\`** — disk image for CM4/CM5/Pi5
-          - ⚙️  **Installer:** \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}\`
+          - 📦 **`metal-arm64.raw.xz`** — disk image for CM4/CM5/Pi5
+          - ⚙️  **Installer:** `${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}`
 
           ### Install
 
           - **Fresh install**
-            - Download \`metal-arm64.raw.xz\` from this release
-            - Flash with \`dd\` or your favorite tool
+            - Download `metal-arm64.raw.xz` from this release
+            - Flash with `dd` or your favorite tool
 
           - **Upgrade existing node**
-            \`\`\`bash
+            ```bash
             talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}
-            \`\`\`
+            ```
 
           EOF
           )
