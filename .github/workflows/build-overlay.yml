@@ -21,17 +21,17 @@ on:
         required: false
         default: 'pr88'
       uboot_version:
-        description: 'U-Boot image version for overlay Pkgfile'
+        description: 'u-boot/u-boot source version (for u-boot-<ver>.tar.bz2)'
         required: false
-        default: '2026.04-rc4.1'
+        default: '2026.01'
       uboot_sha256:
-        description: 'U-Boot image sha256 for overlay Pkgfile'
+        description: 'sha256 for https://ftp.denx.de/pub/u-boot/u-boot-<ver>.tar.bz2'
         required: false
-        default: '11d31f0a221df85f4c50f403d17e065a74432616650cadf1378be3118d4258f5'
+        default: 'b60d5865cefdbc75da8da4156c56c458e00de75a49b80c1a2e58a96e30ad0d54'
       uboot_sha512:
-        description: 'U-Boot image sha512 for overlay Pkgfile'
+        description: 'sha512 for https://ftp.denx.de/pub/u-boot/u-boot-<ver>.tar.bz2'
         required: false
-        default: 'f07783d9b45d05cc01686e14bf8d4a851f3ba02822b41ea154435d9e667a44f61dc8a38b3c5612983a55de2a86939bbb02657f17d7c4e53d2920ba10ef07d4b7'
+        default: 'b1f988a497c77da60faf89ed33034e9ae58c4cd7f208e5ce451f1372e13540a66289bee4f08ca2f68f105d73f1ceae058b1f713db549edbcc885d9c66bdc4f8b'
       rpi_dtb_ref:
         description: 'raspberrypi/linux ref used for DTB packaging'
         required: false

@@ -240,7 +240,8 @@ GHCR_ORG=myorg OVERLAY_TAG=pr88 ./scripts/build-overlay.sh
 
 # keep Talos kernel as-is, but pin overlay internals for CM5
 GHCR_ORG=myorg OVERLAY_TAG=pr88-cm5 \
-UBOOT_VERSION=2026.04-rc4.1 \
+UBOOT_VERSION=2026.01 \
+UBOOT_SHA256=b60d5865cefdbc75da8da4156c56c458e00de75a49b80c1a2e58a96e30ad0d54 \
 RPI_DTB_REF=f2f68e79f16f \
 ./scripts/build-overlay.sh
 
@@ -250,6 +251,8 @@ RPI_DTB_REF=f2f68e79f16f \
 ```
 
 `build-overlay.sh` overrides affect only the `sbc-raspberrypi` overlay (U-Boot + DTBs). They do **not** switch Talos to the Raspberry Pi kernel.
+
+`UBOOT_VERSION`/`UBOOT_SHA*` refer to upstream `u-boot/u-boot` source tarballs (`u-boot-<ver>.tar.bz2` from `ftp.denx.de`), not prebuilt image checksums.
 
 ### Build disk image (after kernel+overlay are in GHCR)
 

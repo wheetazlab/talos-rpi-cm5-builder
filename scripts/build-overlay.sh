@@ -33,11 +33,12 @@ REGISTRY="ghcr.io"
 CHECKOUTS_DIR="${REPO_ROOT}/checkouts"
 
 # Optional overrides for overlay internals (does not change Talos kernel).
-# These values control the U-Boot image pulled by sbc-raspberrypi and the
-# Raspberry Pi Linux source used to package DTBs.
-UBOOT_VERSION="${UBOOT_VERSION:-2026.04-rc4.1}"
-UBOOT_SHA256="${UBOOT_SHA256:-11d31f0a221df85f4c50f403d17e065a74432616650cadf1378be3118d4258f5}"
-UBOOT_SHA512="${UBOOT_SHA512:-f07783d9b45d05cc01686e14bf8d4a851f3ba02822b41ea154435d9e667a44f61dc8a38b3c5612983a55de2a86939bbb02657f17d7c4e53d2920ba10ef07d4b7}"
+# UBOOT_* map to upstream u-boot source tarball checksums:
+#   https://ftp.denx.de/pub/u-boot/u-boot-<version>.tar.bz2
+# These are NOT checksums for prebuilt SD/NVMe images.
+UBOOT_VERSION="${UBOOT_VERSION:-2026.01}"
+UBOOT_SHA256="${UBOOT_SHA256:-b60d5865cefdbc75da8da4156c56c458e00de75a49b80c1a2e58a96e30ad0d54}"
+UBOOT_SHA512="${UBOOT_SHA512:-b1f988a497c77da60faf89ed33034e9ae58c4cd7f208e5ce451f1372e13540a66289bee4f08ca2f68f105d73f1ceae058b1f713db549edbcc885d9c66bdc4f8b}"
 RPI_DTB_REF="${RPI_DTB_REF:-stable_20250428}"
 RPI_DTB_SHA256="${RPI_DTB_SHA256:-c95906cfbc7808de5860c6d86537bea22e3501f600a5209de59a86cb436886f6}"
 RPI_DTB_SHA512="${RPI_DTB_SHA512:-0ed5d490c491e590b5980dccf6fcac0dd3c47accbfacd40d91507c12801cff34fa6a1c68991c8a6c57bb259c909121414766f35a0b11c4bd5d62c3e11d710839}"
@@ -61,9 +62,9 @@ Options:
   --sha SHA            sbc-raspberrypi commit to checkout (default: ${PR88_SHA})
   --tag TAG            Output overlay image tag (default: ${OVERLAY_TAG})
   --org ORG            GHCR org/user (default: ${GHCR_ORG})
-  --uboot-version VER  U-Boot image version used by overlay build (default: ${UBOOT_VERSION})
-  --uboot-sha256 SUM   U-Boot image sha256 (default: ${UBOOT_SHA256})
-  --uboot-sha512 SUM   U-Boot image sha512 (default: ${UBOOT_SHA512})
+  --uboot-version VER  u-boot/u-boot version (default: ${UBOOT_VERSION})
+  --uboot-sha256 SUM   sha256 for u-boot-<ver>.tar.bz2 (default: ${UBOOT_SHA256})
+  --uboot-sha512 SUM   sha512 for u-boot-<ver>.tar.bz2 (default: ${UBOOT_SHA512})
   --rpi-dtb-ref REF    raspberrypi/linux ref for DTB packaging (default: ${RPI_DTB_REF})
   --rpi-dtb-sha256 SUM DTB source tarball sha256 (default: ${RPI_DTB_SHA256})
   --rpi-dtb-sha512 SUM DTB source tarball sha512 (default: ${RPI_DTB_SHA512})
