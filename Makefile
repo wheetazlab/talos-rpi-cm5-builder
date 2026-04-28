@@ -65,7 +65,7 @@ all: build
 build: $(OUT_DIR)
 	@echo "==> Building Talos $(TALOS_VERSION) image for RPI CM5 (overlay: $(OVERLAY_IMAGE))"
 	$(DOCKER) run --rm $(TTY_FLAG) \
-		-v $(CURDIR)/$(OUT_DIR):/out \
+		-v $(abspath $(OUT_DIR)):/out \
 		-v /dev:/dev \
 		--privileged \
 		$(IMAGER_IMAGE) $(OVERLAY) \
@@ -85,7 +85,7 @@ build: $(OUT_DIR)
 installer: $(OUT_DIR)
 	@echo "==> Building Talos installer image for RPI CM4/CM5"
 	$(DOCKER) run --rm $(TTY_FLAG) \
-		-v $(CURDIR)/$(OUT_DIR):/out \
+		-v $(abspath $(OUT_DIR)):/out \
 		-v /dev:/dev \
 		--privileged \
 		$(IMAGER_IMAGE) installer \
