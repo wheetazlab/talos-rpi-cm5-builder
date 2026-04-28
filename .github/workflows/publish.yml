@@ -9,7 +9,7 @@ on:
       talos_version:
         description: 'Base Talos version (e.g. v1.12.7)'
         required: false
-        default: ''
+        default: 'v1.12.7'
       extra_kernel_args:
         description: 'Extra kernel args — space-separated key=value pairs (e.g. cma=256M hugepages=64)'
         required: false
@@ -26,7 +26,7 @@ on:
 env:
   # Default extensions baked into the installer — resolved to digests at build time
   EXTENSION_ISCSI_IMAGE: ghcr.io/siderolabs/iscsi-tools:v0.2.0
-  EXTENSION_UTIL_LINUX_IMAGE: ghcr.io/siderolabs/util-linux-tools:2.41.2
+  EXTENSION_UTIL_LINUX_IMAGE: ghcr.io/siderolabs/util-linux-tools:2.41.4
 
 jobs:
   # ── Resolve the Talos version once and share it across all jobs ─────────────
@@ -54,15 +54,15 @@ jobs:
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             VERSION="${{ github.ref_name }}"
           else
-            VERSION=$(grep '^TALOS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
+            VERSION=$(grep '^TALOS_VERSION' Makefile | awk '{print $NF}')
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "patched_release_tag=${VERSION}-rpi-kernel" >> "$GITHUB_OUTPUT"
-          ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
-          UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
-          LINUX=$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')
-          INSTALLER_BASE=$(grep '^CUSTOM_INSTALLER_BASE' Makefile | awk -F'?=' '{print $2}' | sed 's/^ *//' | tr -d ' ')
-          OVERLAY_IMAGE=$(grep '^CUSTOM_OVERLAY_IMAGE' Makefile | awk -F'?=' '{print $2}' | sed 's/^ *//' | tr -d ' ')
+          ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk '{print $NF}')
+          UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk '{print $NF}')
+          LINUX=$(grep '^LINUX_KERNEL_VERSION' Makefile | awk '{print $NF}')
+          INSTALLER_BASE=$(grep '^CUSTOM_INSTALLER_BASE' Makefile | awk '{print $NF}')
+          OVERLAY_IMAGE=$(grep '^CUSTOM_OVERLAY_IMAGE' Makefile | awk '{print $NF}')
           echo "overlay_image=${OVERLAY_IMAGE}" >> "$GITHUB_OUTPUT"
           echo "linux_kernel_version=${LINUX}" >> "$GITHUB_OUTPUT"
           echo "installer_base=${INSTALLER_BASE}" >> "$GITHUB_OUTPUT"

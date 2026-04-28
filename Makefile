@@ -6,7 +6,7 @@
 # --- Versions ------------------------------------------------------------------
 TALOS_VERSION        ?= v1.12.7
 ISCSI_TOOLS_VERSION  ?= v0.2.0
-UTIL_LINUX_VERSION   ?= 2.41.2
+UTIL_LINUX_VERSION   ?= 2.41.4
 CUSTOM_INSTALLER_BASE ?= ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb
 CUSTOM_OVERLAY_IMAGE  ?= ghcr.io/wheetazlab/sbc-raspberrypi:pr88
 
