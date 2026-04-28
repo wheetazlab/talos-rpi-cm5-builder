@@ -27,7 +27,9 @@ CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE:-ghcr.io/wheetazlab/sbc-raspberrypi
 # Extra extension images appended on top of defaults (--extension adds to this)
 EXTRA_EXTENSION_IMAGES=()
 # Extra kernel args accumulated via --kernel-arg KEY=VALUE
-EXTRA_KERNEL_ARG_FLAGS=()
+# Default: disable continuous MMC polling to avoid repeated timeout loops when
+# no SD media is present. SD boot with card present at boot still works.
+EXTRA_KERNEL_ARG_FLAGS=("--extra-kernel-arg=mmc_core.polling=0")
 
 # --- Arg parsing ---------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
