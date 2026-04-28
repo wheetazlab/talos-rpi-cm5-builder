@@ -122,13 +122,13 @@ perl -i -pe "s|^(\s*raspberrypi_kernel_sha512:\s*).*$|\$1${RPI_DTB_SHA512}|" Pkg
 perl -i -pe "s|https://github.com/raspberrypi/linux/archive/refs/tags/\{\{ \.raspberrypi_kernel_version \}\}\.tar\.gz|https://github.com/raspberrypi/linux/archive/\{\{ .raspberrypi_kernel_version \}\}\.tar\.gz|g" artifacts/dtb/raspberrypi/pkg.yaml
 
 if [[ "${PI5_SD_POLL_ONCE}" == "true" ]]; then
-  if ! grep -q '^dtparam=sd_poll_once' installers/rpi_generic/src/config.txt; then
-    awk '
-      { print }
-      /^\[pi5\]$/ { print "dtparam=sd_poll_once" }
-    ' installers/rpi_generic/src/config.txt > installers/rpi_generic/src/config.txt.new
-    mv installers/rpi_generic/src/config.txt.new installers/rpi_generic/src/config.txt
-  fi
+  cat >> installers/rpi_generic/src/config.txt <<'EOF'
+
+[cm5]
+dtparam=sd_poll_once
+[pi5]
+dtparam=sd_poll_once
+EOF
 fi
 
 # -- Build and push the overlay OCI ------------------------------------------

@@ -149,7 +149,7 @@ Manually-triggered workflow that builds and pushes `ghcr.io/<owner>/sbc-raspberr
 **Inputs:**
 - `pr88_sha` — commit SHA in `sidero-community/sbc-raspberrypi` (default: PR #88 head)
 - `overlay_tag` — image tag to publish (default: `pr88`)
-- `pi5_sd_poll_once` — default `true`; injects `dtparam=sd_poll_once` under `[pi5]` to prevent repeated empty-SD retries on CM5 while keeping SD/NVMe/PXE boot support
+- `pi5_sd_poll_once` — default `true`; injects `dtparam=sd_poll_once` under `[cm5]` and `[pi5]` to prevent repeated empty-SD retries while keeping SD/NVMe/PXE boot support
 
 After running, update `CUSTOM_OVERLAY_IMAGE` in the Makefile to the new tag.
 
