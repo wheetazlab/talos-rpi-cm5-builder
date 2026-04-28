@@ -128,14 +128,14 @@ jobs:
           EXTENSIONS: ${{ steps.extensions.outputs.list }}
           EXTRA_KERNEL_ARGS: ${{ steps.kargs.outputs.flags }}
         run: |
-          mkdir -p "$RUNNER_TEMP/talos-out"
+          mkdir -p /tmp/talos-out
           make build \
             TALOS_VERSION=${{ env.TALOS_VERSION }} \
             CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} \
             CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }} \
             EXTENSIONS="${EXTENSIONS}" \
             EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS}" \
-            OUT_DIR="$RUNNER_TEMP/talos-out"
+            OUT_DIR=/tmp/talos-out
 
       - name: Build installer
         env:
@@ -148,16 +148,16 @@ jobs:
             CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }} \
             EXTENSIONS="${EXTENSIONS}" \
             EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS}" \
-            OUT_DIR="$RUNNER_TEMP/talos-out"
+            OUT_DIR=/tmp/talos-out
 
       - name: Push installer to GHCR
-        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} OUT_DIR="$RUNNER_TEMP/talos-out"
+        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} OUT_DIR=/tmp/talos-out
 
       - name: Upload disk image
         uses: actions/upload-artifact@v4
         with:
           name: metal-arm64
-          path: ${{ runner.temp }}/talos-out/metal-arm64.raw.xz
+          path: /tmp/talos-out/metal-arm64.raw.xz
 
   # ── Create GitHub release ───────────────────────────────────────────────────
   release:
