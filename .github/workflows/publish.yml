@@ -137,21 +137,41 @@ jobs:
             EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS}" \
             OUT_DIR=/tmp/talos-out
 
-      - name: Build installer
+      - name: Build installer and push to GHCR
         env:
           EXTENSIONS: ${{ steps.extensions.outputs.list }}
           EXTRA_KERNEL_ARGS: ${{ steps.kargs.outputs.flags }}
         run: |
-          make installer \
-            TALOS_VERSION=${{ env.TALOS_VERSION }} \
-            CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} \
-            CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }} \
-            EXTENSIONS="${EXTENSIONS}" \
-            EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS}" \
-            OUT_DIR=/tmp/talos-out
+          # Build extension flags
+          EXT_ARGS=""
+          for img in ${EXTENSIONS}; do
+            EXT_ARGS="${EXT_ARGS} --system-extension-image=${img}"
+          done
 
-      - name: Push installer to GHCR
-        run: make push-installer TALOS_VERSION=${{ env.TALOS_VERSION }} INSTALLER_TAG=${{ env.PATCHED_RELEASE_TAG }} CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} OUT_DIR=/tmp/talos-out
+          # Use a Docker named volume — lives in the Docker VM, no macOS bind-mount issues
+          docker volume create talos-installer-out
+
+          docker run --rm \
+            -v /dev:/dev \
+            --privileged \
+            -v talos-installer-out:/out \
+            ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }} installer \
+            --base-installer-image="${{ needs.resolve-version.outputs.installer_base }}" \
+            --overlay-image="${{ needs.resolve-version.outputs.overlay_image }}" \
+            --overlay-name="rpi_generic" \
+            ${EXT_ARGS} \
+            ${EXTRA_KERNEL_ARGS} \
+            --arch arm64
+
+          # Copy installer tar to runner filesystem via container stdout (not a bind mount)
+          docker run --rm -v talos-installer-out:/src alpine \
+            cat /src/installer-arm64.tar > /tmp/installer.tar
+
+          docker volume rm talos-installer-out
+
+          # Push via crane (already authenticated)
+          crane push /tmp/installer.tar \
+            ghcr.io/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}
 
       - name: Upload disk image
         uses: actions/upload-artifact@v4
