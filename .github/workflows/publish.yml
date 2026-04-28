@@ -137,17 +137,22 @@ jobs:
           # Use a Docker named volume — lives in the Docker VM, no macOS/DinD bind-mount issues
           docker volume create talos-image-out
 
-          docker run --rm \
-            -v /dev:/dev \
-            --privileged \
-            -v talos-image-out:/out \
-            ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }} rpi_generic \
-            --base-installer-image="${{ needs.resolve-version.outputs.installer_base }}" \
-            --overlay-image="${{ needs.resolve-version.outputs.overlay_image }}" \
-            --overlay-name="rpi_generic" \
-            ${EXT_ARGS} \
-            ${EXTRA_KERNEL_ARGS} \
+          # Bash array avoids backslash continuations (mac-runner DinD compat)
+          DOCKER_ARGS=(
+            run --rm
+            -v /dev:/dev
+            --privileged
+            -v talos-image-out:/out
+            "ghcr.io/siderolabs/imager:${TALOS_VERSION}"
+            rpi_generic
+            "--base-installer-image=${{ needs.resolve-version.outputs.installer_base }}"
+            "--overlay-image=${{ needs.resolve-version.outputs.overlay_image }}"
+            --overlay-name=rpi_generic
+            ${EXT_ARGS}
+            ${EXTRA_KERNEL_ARGS}
             --arch arm64
+          )
+          docker "${DOCKER_ARGS[@]}"
 
           # Copy disk image to runner filesystem via container stdout (not a bind mount)
           docker run --rm -v talos-image-out:/src alpine \
@@ -169,17 +174,22 @@ jobs:
           # Use a Docker named volume — lives in the Docker VM, no macOS bind-mount issues
           docker volume create talos-installer-out
 
-          docker run --rm \
-            -v /dev:/dev \
-            --privileged \
-            -v talos-installer-out:/out \
-            ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }} installer \
-            --base-installer-image="${{ needs.resolve-version.outputs.installer_base }}" \
-            --overlay-image="${{ needs.resolve-version.outputs.overlay_image }}" \
-            --overlay-name="rpi_generic" \
-            ${EXT_ARGS} \
-            ${EXTRA_KERNEL_ARGS} \
+          # Bash array avoids backslash continuations (mac-runner DinD compat)
+          DOCKER_ARGS=(
+            run --rm
+            -v /dev:/dev
+            --privileged
+            -v talos-installer-out:/out
+            "ghcr.io/siderolabs/imager:${TALOS_VERSION}"
+            installer
+            "--base-installer-image=${{ needs.resolve-version.outputs.installer_base }}"
+            "--overlay-image=${{ needs.resolve-version.outputs.overlay_image }}"
+            --overlay-name=rpi_generic
+            ${EXT_ARGS}
+            ${EXTRA_KERNEL_ARGS}
             --arch arm64
+          )
+          docker "${DOCKER_ARGS[@]}"
 
           # Copy installer tar to runner filesystem via container stdout (not a bind mount)
           docker run --rm -v talos-installer-out:/src alpine \
