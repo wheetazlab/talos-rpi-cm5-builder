@@ -29,13 +29,17 @@ on:
         description: 'Output image tag (e.g. v1.12.7-k-macb)'
         required: false
         default: 'v1.12.7-k-macb'
+      runner:
+        description: 'GitHub Actions runner (e.g. ubuntu-24.04-arm, mac-runner)'
+        required: false
+        default: 'ubuntu-24.04-arm'
   push:
     tags:
       - 'v*-kernel'
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
     permissions:
       contents: read
       packages: write
