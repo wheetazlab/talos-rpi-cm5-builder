@@ -128,14 +128,32 @@ jobs:
           EXTENSIONS: ${{ steps.extensions.outputs.list }}
           EXTRA_KERNEL_ARGS: ${{ steps.kargs.outputs.flags }}
         run: |
-          mkdir -p /tmp/talos-out
-          make build \
-            TALOS_VERSION=${{ env.TALOS_VERSION }} \
-            CUSTOM_INSTALLER_BASE=${{ needs.resolve-version.outputs.installer_base }} \
-            CUSTOM_OVERLAY_IMAGE=${{ needs.resolve-version.outputs.overlay_image }} \
-            EXTENSIONS="${EXTENSIONS}" \
-            EXTRA_KERNEL_ARGS="${EXTRA_KERNEL_ARGS}" \
-            OUT_DIR=/tmp/talos-out
+          # Build extension flags
+          EXT_ARGS=""
+          for img in ${EXTENSIONS}; do
+            EXT_ARGS="${EXT_ARGS} --system-extension-image=${img}"
+          done
+
+          # Use a Docker named volume — lives in the Docker VM, no macOS/DinD bind-mount issues
+          docker volume create talos-image-out
+
+          docker run --rm \
+            -v /dev:/dev \
+            --privileged \
+            -v talos-image-out:/out \
+            ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }} rpi_generic \
+            --base-installer-image="${{ needs.resolve-version.outputs.installer_base }}" \
+            --overlay-image="${{ needs.resolve-version.outputs.overlay_image }}" \
+            --overlay-name="rpi_generic" \
+            ${EXT_ARGS} \
+            ${EXTRA_KERNEL_ARGS} \
+            --arch arm64
+
+          # Copy disk image to runner filesystem via container stdout (not a bind mount)
+          docker run --rm -v talos-image-out:/src alpine \
+            cat /src/metal-arm64.raw.xz > /tmp/metal-arm64.raw.xz
+
+          docker volume rm talos-image-out
 
       - name: Build installer and push to GHCR
         env:
@@ -177,7 +195,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: metal-arm64
-          path: /tmp/talos-out/metal-arm64.raw.xz
+          path: /tmp/metal-arm64.raw.xz
 
   # ── Create GitHub release ───────────────────────────────────────────────────
   release:
