@@ -28,7 +28,7 @@ Three patches are applied to the standard Talos kernel (`patches/linux/`) to fix
 | `0002` | Re-check ISR after IER re-enable in `macb_tx_poll` |
 | `0003` | TX stall watchdog — defence-in-depth per-queue `delayed_work` |
 
-These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198). @smira (siderolabs) confirmed they will accept a PR to `pkgs/` once the macb patches land in a stable kernel release.
+These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198). Original patches by [@lukaszraczylo](https://github.com/lukaszraczylo) — sourced from [sbc-raspberrypi#91 (comment)](https://github.com/siderolabs/sbc-raspberrypi/issues/91#issuecomment-4327078909). @smira (siderolabs) confirmed they will accept a PR to `pkgs/` once the macb patches land in a stable kernel release.
 
 ---
 
