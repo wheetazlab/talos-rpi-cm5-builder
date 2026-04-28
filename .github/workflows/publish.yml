@@ -43,6 +43,22 @@ jobs:
       extra_kernel_args: ${{ steps.version.outputs.extra_kernel_args }}
       extra_extensions: ${{ steps.version.outputs.extra_extensions }}
     steps:
+      - name: Preflight disk cleanup (self-hosted safe)
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          if [[ -d /actions-runner/_diag ]]; then
+            sudo find /actions-runner/_diag -type f -name '*.log' -mtime +2 -print -delete || true
+          fi
+          if [[ -d /actions-runner/_work/_temp ]]; then
+            sudo rm -rf /actions-runner/_work/_temp/* || true
+          fi
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -86,6 +102,22 @@ jobs:
       REGISTRY: ghcr.io
       REGISTRY_USERNAME: ${{ github.repository_owner }}
     steps:
+      - name: Preflight disk cleanup (self-hosted safe)
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          if [[ -d /actions-runner/_diag ]]; then
+            sudo find /actions-runner/_diag -type f -name '*.log' -mtime +2 -print -delete || true
+          fi
+          if [[ -d /actions-runner/_work/_temp ]]; then
+            sudo rm -rf /actions-runner/_work/_temp/* || true
+          fi
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -207,6 +239,16 @@ jobs:
           name: metal-arm64
           path: /tmp/metal-arm64.raw.xz
 
+      - name: Postflight BuildKit cleanup
+        if: always()
+        run: |
+          set +e
+          docker ps -a --format '{{.Names}}' | grep '^buildx_buildkit_' | xargs -r docker rm -f
+          docker volume ls --format '{{.Name}}' | grep '^buildx_buildkit_.*_state$' | xargs -r docker volume rm
+          docker builder prune -af || true
+          docker system prune -af --volumes || true
+          df -h
+
   # ── Create GitHub release ───────────────────────────────────────────────────
   release:
     runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
@@ -225,6 +267,22 @@ jobs:
       REGISTRY_USERNAME: ${{ github.repository_owner }}
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: Preflight disk cleanup (self-hosted safe)
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          if [[ -d /actions-runner/_diag ]]; then
+            sudo find /actions-runner/_diag -type f -name '*.log' -mtime +2 -print -delete || true
+          fi
+          if [[ -d /actions-runner/_work/_temp ]]; then
+            sudo rm -rf /actions-runner/_work/_temp/* || true
+          fi
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Download disk image artifact
         uses: actions/download-artifact@v4
         with:

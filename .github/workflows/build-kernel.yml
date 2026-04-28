@@ -52,6 +52,22 @@ jobs:
       REGISTRY_USERNAME: ${{ github.repository_owner }}
 
     steps:
+      - name: Preflight disk cleanup (self-hosted safe)
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          if [[ -d /actions-runner/_diag ]]; then
+            sudo find /actions-runner/_diag -type f -name '*.log' -mtime +2 -print -delete || true
+          fi
+          if [[ -d /actions-runner/_work/_temp ]]; then
+            sudo rm -rf /actions-runner/_work/_temp/* || true
+          fi
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Checkout talos-rpi-cm5-builder
         uses: actions/checkout@v4
 
@@ -159,6 +175,16 @@ jobs:
           crane copy \
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/installer-base:${{ steps.ver.outputs.talos_version }} \
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/rpi-talos:${{ steps.ver.outputs.installer_tag }}
+
+      - name: Postflight BuildKit cleanup
+        if: always()
+        run: |
+          set +e
+          docker ps -a --format '{{.Names}}' | grep '^buildx_buildkit_' | xargs -r docker rm -f
+          docker volume ls --format '{{.Name}}' | grep '^buildx_buildkit_.*_state$' | xargs -r docker volume rm
+          docker builder prune -af || true
+          docker system prune -af --volumes || true
+          df -h
 
       - name: Summary
         run: |

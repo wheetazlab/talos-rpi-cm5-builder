@@ -56,6 +56,22 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Preflight disk cleanup (self-hosted safe)
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          if [[ -d /actions-runner/_diag ]]; then
+            sudo find /actions-runner/_diag -type f -name '*.log' -mtime +2 -print -delete || true
+          fi
+          if [[ -d /actions-runner/_work/_temp ]]; then
+            sudo rm -rf /actions-runner/_work/_temp/* || true
+          fi
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -96,6 +112,16 @@ jobs:
             TAG=${{ github.event.inputs.overlay_tag }} \
             PLATFORM=linux/arm64 \
             PUSH=true
+
+      - name: Postflight BuildKit cleanup
+        if: always()
+        run: |
+          set +e
+          docker ps -a --format '{{.Names}}' | grep '^buildx_buildkit_' | xargs -r docker rm -f
+          docker volume ls --format '{{.Name}}' | grep '^buildx_buildkit_.*_state$' | xargs -r docker volume rm
+          docker builder prune -af || true
+          docker system prune -af --volumes || true
+          df -h
 
       - name: Summary
         run: |
