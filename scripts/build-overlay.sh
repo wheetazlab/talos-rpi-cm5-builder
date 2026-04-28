@@ -32,25 +32,50 @@ GHCR_ORG="${GHCR_ORG:-wheetazlab}"
 REGISTRY="ghcr.io"
 CHECKOUTS_DIR="${REPO_ROOT}/checkouts"
 
+# Optional overrides for overlay internals (does not change Talos kernel).
+# These values control the U-Boot image pulled by sbc-raspberrypi and the
+# Raspberry Pi Linux source used to package DTBs.
+UBOOT_VERSION="${UBOOT_VERSION:-2026.04-rc4.1}"
+UBOOT_SHA256="${UBOOT_SHA256:-11d31f0a221df85f4c50f403d17e065a74432616650cadf1378be3118d4258f5}"
+UBOOT_SHA512="${UBOOT_SHA512:-f07783d9b45d05cc01686e14bf8d4a851f3ba02822b41ea154435d9e667a44f61dc8a38b3c5612983a55de2a86939bbb02657f17d7c4e53d2920ba10ef07d4b7}"
+RPI_DTB_REF="${RPI_DTB_REF:-stable_20250428}"
+RPI_DTB_SHA256="${RPI_DTB_SHA256:-c95906cfbc7808de5860c6d86537bea22e3501f600a5209de59a86cb436886f6}"
+RPI_DTB_SHA512="${RPI_DTB_SHA512:-0ed5d490c491e590b5980dccf6fcac0dd3c47accbfacd40d91507c12801cff34fa6a1c68991c8a6c57bb259c909121414766f35a0b11c4bd5d62c3e11d710839}"
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --sha)     PR88_SHA="$2";    shift 2 ;;
-    --tag)     OVERLAY_TAG="$2"; shift 2 ;;
-    --org)     GHCR_ORG="$2";   shift 2 ;;
+    --sha) PR88_SHA="$2"; shift 2 ;;
+    --tag) OVERLAY_TAG="$2"; shift 2 ;;
+    --org) GHCR_ORG="$2"; shift 2 ;;
+    --uboot-version) UBOOT_VERSION="$2"; shift 2 ;;
+    --uboot-sha256) UBOOT_SHA256="$2"; shift 2 ;;
+    --uboot-sha512) UBOOT_SHA512="$2"; shift 2 ;;
+    --rpi-dtb-ref) RPI_DTB_REF="$2"; shift 2 ;;
+    --rpi-dtb-sha256) RPI_DTB_SHA256="$2"; shift 2 ;;
+    --rpi-dtb-sha512) RPI_DTB_SHA512="$2"; shift 2 ;;
     --help|-h)
-      cat <<EOF
+      cat <<USAGE
 Usage: $0 [options]
 
 Options:
-  --sha SHA   sbc-raspberrypi commit to checkout (default: ${PR88_SHA})
-  --tag TAG   Output overlay image tag (default: ${OVERLAY_TAG})
-  --org ORG   GHCR org/user (default: ${GHCR_ORG})
+  --sha SHA            sbc-raspberrypi commit to checkout (default: ${PR88_SHA})
+  --tag TAG            Output overlay image tag (default: ${OVERLAY_TAG})
+  --org ORG            GHCR org/user (default: ${GHCR_ORG})
+  --uboot-version VER  U-Boot image version used by overlay build (default: ${UBOOT_VERSION})
+  --uboot-sha256 SUM   U-Boot image sha256 (default: ${UBOOT_SHA256})
+  --uboot-sha512 SUM   U-Boot image sha512 (default: ${UBOOT_SHA512})
+  --rpi-dtb-ref REF    raspberrypi/linux ref for DTB packaging (default: ${RPI_DTB_REF})
+  --rpi-dtb-sha256 SUM DTB source tarball sha256 (default: ${RPI_DTB_SHA256})
+  --rpi-dtb-sha512 SUM DTB source tarball sha512 (default: ${RPI_DTB_SHA512})
 
 Output image: ghcr.io/<org>/sbc-raspberrypi:<tag>
-EOF
+USAGE
       exit 0
       ;;
-    *) echo "Unknown option: $1"; exit 1 ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
   esac
 done
 
@@ -60,13 +85,15 @@ echo "============================================================"
 echo " PR #88 SHA       : ${PR88_SHA}"
 echo " Overlay tag      : ${OVERLAY_TAG}"
 echo " GHCR org         : ${GHCR_ORG}"
+echo " U-Boot version   : ${UBOOT_VERSION}"
+echo " DTB ref          : ${RPI_DTB_REF}"
 echo " Checkouts dir    : ${CHECKOUTS_DIR}"
 echo "============================================================"
 echo ""
 
 mkdir -p "${CHECKOUTS_DIR}"
 
-# ── Clone sbc-raspberrypi and checkout the specific PR commit ─────────────
+# -- Clone sbc-raspberrypi and checkout the specific PR commit --------------
 
 echo "==> Cloning sidero-community/sbc-raspberrypi..."
 rm -rf "${CHECKOUTS_DIR}/sbc-raspberrypi"
@@ -78,7 +105,18 @@ echo "==> Checking out commit ${PR88_SHA}..."
 cd "${CHECKOUTS_DIR}/sbc-raspberrypi"
 git -c advice.detachedHead=false checkout "${PR88_SHA}"
 
-# ── Build and push the overlay OCI ───────────────────────────────────────
+# Keep Talos kernel untouched; only tune overlay internals.
+echo ""
+echo "==> Patching overlay Pkgfile/DTB source pins..."
+perl -i -pe "s|^(\s*uboot_version:\s*).*$|\$1${UBOOT_VERSION}|" Pkgfile
+perl -i -pe "s|^(\s*uboot_sha256:\s*).*$|\$1${UBOOT_SHA256}|" Pkgfile
+perl -i -pe "s|^(\s*uboot_sha512:\s*).*$|\$1${UBOOT_SHA512}|" Pkgfile
+perl -i -pe "s|^(\s*raspberrypi_kernel_version:\s*).*$|\$1${RPI_DTB_REF}|" Pkgfile
+perl -i -pe "s|^(\s*raspberrypi_kernel_sha256:\s*).*$|\$1${RPI_DTB_SHA256}|" Pkgfile
+perl -i -pe "s|^(\s*raspberrypi_kernel_sha512:\s*).*$|\$1${RPI_DTB_SHA512}|" Pkgfile
+perl -i -pe "s|https://github.com/raspberrypi/linux/archive/refs/tags/\{\{ \.raspberrypi_kernel_version \}\}\.tar\.gz|https://github.com/raspberrypi/linux/archive/\{\{ .raspberrypi_kernel_version \}\}\.tar\.gz|g" artifacts/dtb/raspberrypi/pkg.yaml
+
+# -- Build and push the overlay OCI ------------------------------------------
 
 echo ""
 echo "==> Building sbc-raspberrypi overlay (this takes a while)..."

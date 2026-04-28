@@ -13,13 +13,37 @@ on:
   workflow_dispatch:
     inputs:
       pr88_sha:
-        description: 'sidero-community/sbc-raspberrypi commit SHA (PR #88 head)'
+        description: 'sidero-community/sbc-raspberrypi commit SHA (overlay source, PR #88 lineage)'
         required: false
         default: 'e5ab77462b5ed1ee594ae71f35c0262b51a72524'
       overlay_tag:
         description: 'Tag for the overlay image (e.g. pr88, pr88-2, latest)'
         required: false
         default: 'pr88'
+      uboot_version:
+        description: 'U-Boot image version for overlay Pkgfile'
+        required: false
+        default: '2026.04-rc4.1'
+      uboot_sha256:
+        description: 'U-Boot image sha256 for overlay Pkgfile'
+        required: false
+        default: '11d31f0a221df85f4c50f403d17e065a74432616650cadf1378be3118d4258f5'
+      uboot_sha512:
+        description: 'U-Boot image sha512 for overlay Pkgfile'
+        required: false
+        default: 'f07783d9b45d05cc01686e14bf8d4a851f3ba02822b41ea154435d9e667a44f61dc8a38b3c5612983a55de2a86939bbb02657f17d7c4e53d2920ba10ef07d4b7'
+      rpi_dtb_ref:
+        description: 'raspberrypi/linux ref used for DTB packaging'
+        required: false
+        default: 'stable_20250428'
+      rpi_dtb_sha256:
+        description: 'sha256 for raspberrypi/linux tarball at rpi_dtb_ref'
+        required: false
+        default: 'c95906cfbc7808de5860c6d86537bea22e3501f600a5209de59a86cb436886f6'
+      rpi_dtb_sha512:
+        description: 'sha512 for raspberrypi/linux tarball at rpi_dtb_ref'
+        required: false
+        default: '0ed5d490c491e590b5980dccf6fcac0dd3c47accbfacd40d91507c12801cff34fa6a1c68991c8a6c57bb259c909121414766f35a0b11c4bd5d62c3e11d710839'
       runner:
         description: 'GitHub Actions runner (e.g. ubuntu-24.04-arm, mac-runner)'
         required: false
@@ -49,6 +73,19 @@ jobs:
           git fetch --depth=1 origin ${{ github.event.inputs.pr88_sha }} || true
           git checkout ${{ github.event.inputs.pr88_sha }}
 
+      - name: Patch overlay internals (U-Boot + DTB pins)
+        run: |
+          cd sbc-raspberrypi
+
+          # Keep Talos kernel unchanged; only adjust overlay internals.
+          sed -i -E "s|^([[:space:]]*uboot_version:[[:space:]]*).*$|\1${{ github.event.inputs.uboot_version }}|" Pkgfile
+          sed -i -E "s|^([[:space:]]*uboot_sha256:[[:space:]]*).*$|\1${{ github.event.inputs.uboot_sha256 }}|" Pkgfile
+          sed -i -E "s|^([[:space:]]*uboot_sha512:[[:space:]]*).*$|\1${{ github.event.inputs.uboot_sha512 }}|" Pkgfile
+          sed -i -E "s|^([[:space:]]*raspberrypi_kernel_version:[[:space:]]*).*$|\1${{ github.event.inputs.rpi_dtb_ref }}|" Pkgfile
+          sed -i -E "s|^([[:space:]]*raspberrypi_kernel_sha256:[[:space:]]*).*$|\1${{ github.event.inputs.rpi_dtb_sha256 }}|" Pkgfile
+          sed -i -E "s|^([[:space:]]*raspberrypi_kernel_sha512:[[:space:]]*).*$|\1${{ github.event.inputs.rpi_dtb_sha512 }}|" Pkgfile
+          sed -i -E "s|https://github.com/raspberrypi/linux/archive/refs/tags/\{\{ \.raspberrypi_kernel_version \}\}\.tar\.gz|https://github.com/raspberrypi/linux/archive/\{\{ .raspberrypi_kernel_version \}\}\.tar\.gz|g" artifacts/dtb/raspberrypi/pkg.yaml
+
       - name: Build and push custom overlay
         run: |
           cd sbc-raspberrypi
@@ -66,6 +103,8 @@ jobs:
           echo "| Item | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Source | sidero-community/sbc-raspberrypi @ \`${{ github.event.inputs.pr88_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| U-Boot | \`${{ github.event.inputs.uboot_version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| DTB ref | \`${{ github.event.inputs.rpi_dtb_ref }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Image | \`ghcr.io/${{ github.repository_owner }}/sbc-raspberrypi:${{ github.event.inputs.overlay_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Update \`CUSTOM_OVERLAY_IMAGE\` in the Makefile to use this new tag." >> "$GITHUB_STEP_SUMMARY"

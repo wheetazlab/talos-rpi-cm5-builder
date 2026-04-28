@@ -238,10 +238,18 @@ GHCR_ORG=myorg TALOS_VERSION=v1.12.7 PKG_VERSION=v1.12.0-58-g86d6af1 INSTALLER_T
 # build-overlay.sh options
 GHCR_ORG=myorg OVERLAY_TAG=pr88 ./scripts/build-overlay.sh
 
+# keep Talos kernel as-is, but pin overlay internals for CM5
+GHCR_ORG=myorg OVERLAY_TAG=pr88-cm5 \
+UBOOT_VERSION=2026.04-rc4.1 \
+RPI_DTB_REF=f2f68e79f16f \
+./scripts/build-overlay.sh
+
 # Both scripts accept --help for full option list
 ./scripts/build-kernel.sh --help
 ./scripts/build-overlay.sh --help
 ```
+
+`build-overlay.sh` overrides affect only the `sbc-raspberrypi` overlay (U-Boot + DTBs). They do **not** switch Talos to the Raspberry Pi kernel.
 
 ### Build disk image (after kernel+overlay are in GHCR)
 
