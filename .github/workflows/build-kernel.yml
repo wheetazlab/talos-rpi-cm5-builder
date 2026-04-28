@@ -57,6 +57,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Set up Docker Buildx
+        if: runner.name != 'mac-runner'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
