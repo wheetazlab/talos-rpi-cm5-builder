@@ -25,6 +25,10 @@ on:
         description: 'siderolabs/pkgs ref — branch, tag, or git-describe (e.g. v1.12.0-58-g86d6af1)'
         required: false
         default: 'v1.12.0-58-g86d6af1'
+      pkgs_macb_pr:
+        description: 'siderolabs/pkgs PR number containing canonical macb patch set'
+        required: false
+        default: '1526'
       installer_tag:
         description: 'Output image tag (e.g. v1.12.7-k-macb)'
         required: false
@@ -79,16 +83,19 @@ jobs:
             TAG="${{ github.ref_name }}"
             TALOS_VERSION=$(echo "$TAG" | grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+')
             PKG_VERSION="v1.12.0-58-g86d6af1"
+            PKGS_MACB_PR="1526"
             INSTALLER_TAG="${TALOS_VERSION}-k-macb"
           else
             TALOS_VERSION="${{ github.event.inputs.talos_version }}"
             PKG_VERSION="${{ github.event.inputs.pkg_version }}"
+            PKGS_MACB_PR="${{ github.event.inputs.pkgs_macb_pr }}"
             INSTALLER_TAG="${{ github.event.inputs.installer_tag }}"
           fi
           echo "talos_version=${TALOS_VERSION}" >> "$GITHUB_OUTPUT"
           echo "pkg_version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "pkgs_macb_pr=${PKGS_MACB_PR}" >> "$GITHUB_OUTPUT"
           echo "installer_tag=${INSTALLER_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Resolved: Talos=${TALOS_VERSION}  pkgs=${PKG_VERSION}  tag=${INSTALLER_TAG}"
+          echo "Resolved: Talos=${TALOS_VERSION}  pkgs=${PKG_VERSION}  macb-pr=#${PKGS_MACB_PR}  tag=${INSTALLER_TAG}"
 
       # ── siderolabs/pkgs: standard Talos kernel + macb patches ──────────────
 
@@ -100,10 +107,14 @@ jobs:
           [[ "$PKG_REF" =~ -[0-9]+-g([0-9a-f]+)$ ]] && PKG_REF="${BASH_REMATCH[1]}"
           git -C checkouts/pkgs -c advice.detachedHead=false checkout "$PKG_REF"
 
-      - name: Copy macb kernel patches into pkgs
+      - name: Import macb kernel patches from pkgs PR
         run: |
-          mkdir -p checkouts/pkgs/kernel/build/patches
-          cp -v patches/linux/*.patch checkouts/pkgs/kernel/build/patches/
+          git -C checkouts/pkgs fetch origin pull/${{ steps.ver.outputs.pkgs_macb_pr }}/head:pr-macb
+          git -C checkouts/pkgs checkout pr-macb -- \
+            kernel/build/patches/0001-net-macb-flush-PCIe-posted-write-after-TSTART-doorbe.patch \
+            kernel/build/patches/0002-net-macb-re-check-ISR-after-IER-re-enable-in-macb_tx.patch \
+            kernel/build/patches/0003-net-macb-add-TX-stall-watchdog-as-defence-in-depth-s.patch
+          ls -1 checkouts/pkgs/kernel/build/patches/000*-net-macb-*.patch
 
       - name: Build kernel (siderolabs/pkgs)
         run: |
@@ -157,7 +168,8 @@ jobs:
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Talos | \`${{ steps.ver.outputs.talos_version }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| pkgs | \`${{ steps.ver.outputs.pkg_version }}\` @ \`${{ steps.pkgs.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| kernel | standard siderolabs/pkgs (mainline stable) + 3 macb patches |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| macb patch source | \`siderolabs/pkgs#${{ steps.ver.outputs.pkgs_macb_pr }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| kernel | standard siderolabs/pkgs (mainline stable) + 3 macb patches from PR |" >> "$GITHUB_STEP_SUMMARY"
           echo "| kernel OCI | \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| installer-base | \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/installer-base:${{ steps.ver.outputs.talos_version }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| **rpi-talos (use this)** | \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/rpi-talos:${{ steps.ver.outputs.installer_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"

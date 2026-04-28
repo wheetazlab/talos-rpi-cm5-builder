@@ -8,7 +8,7 @@ Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM
 
 Builds a single `rpi_generic` image that works across CM4, CM5, and Pi 5 boards.
 
-The build pipeline is fully self-contained — the kernel (`ghcr.io/wheetazlab/rpi-talos`) is built from source via `build-kernel.yml`, using the standard `siderolabs/pkgs` kernel with three macb ethernet patches applied on top. The disk image is assembled by `publish.yml` using that kernel image plus a custom `sbc-raspberrypi` overlay (full BCM2712/RP1 U-Boot with NVMe/PCIe support, unified `rpi_generic` installer), `iscsi-tools`, and `util-linux-tools`.
+The build pipeline is fully self-contained — the kernel (`ghcr.io/wheetazlab/rpi-talos`) is built from source via `build-kernel.yml`, using the standard `siderolabs/pkgs` kernel with three macb ethernet patches imported directly from `siderolabs/pkgs` PR #1526. The disk image is assembled by `publish.yml` using that kernel image plus a custom `sbc-raspberrypi` overlay (full BCM2712/RP1 U-Boot with NVMe/PCIe support, unified `rpi_generic` installer), `iscsi-tools`, and `util-linux-tools`.
 
 ## Background
 
@@ -28,7 +28,7 @@ Three patches are applied to the standard Talos kernel (`patches/linux/`) to fix
 | `0002` | Re-check ISR after IER re-enable in `macb_tx_poll` |
 | `0003` | TX stall watchdog — defence-in-depth per-queue `delayed_work` |
 
-These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198). Original patches by [@lukaszraczylo](https://github.com/lukaszraczylo) — sourced from [sbc-raspberrypi#91 (comment)](https://github.com/siderolabs/sbc-raspberrypi/issues/91#issuecomment-4327078909). @smira (siderolabs) confirmed they will accept a PR to `pkgs/` once the macb patches land in a stable kernel release.
+These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198). The canonical source used by this repo is [siderolabs/pkgs PR #1526](https://github.com/siderolabs/pkgs/pull/1526).
 
 ---
 
@@ -89,7 +89,7 @@ Builds the custom installer-base OCI image that `publish.yml` consumes. Run this
 
 **Pipeline:**
 1. Clones `siderolabs/pkgs` at `PKG_VERSION` (standard upstream kernel, no vendor fork)
-2. Copies `patches/linux/*.patch` (3 macb patches) into the pkgs kernel patch directory
+2. Fetches macb patches directly from `siderolabs/pkgs` PR #1526 into the pkgs kernel patch directory
 3. Builds and pushes `ghcr.io/<owner>/kernel:<pkgs-tag>` using pkgs' native patch-and-build
 4. Clones `siderolabs/talos` at `talos_version` (unmodified — no patches needed)
 5. Builds and pushes `installer-base` with `PKG_KERNEL=` pointing to the macb-patched kernel OCI
@@ -103,6 +103,7 @@ Builds the custom installer-base OCI image that `publish.yml` consumes. Run this
 |-------|---------|-------------|
 | `talos_version` | `v1.12.7` | Talos branch to build |
 | `pkg_version` | `v1.12.0-58-g86d6af1` | `siderolabs/pkgs` ref (branch, tag, or git-describe) |
+| `pkgs_macb_pr` | `1526` | `siderolabs/pkgs` PR number that provides macb patches |
 | `installer_tag` | `v1.12.7-k-macb` | Output image tag |
 
 Also triggers on push of a `v*-kernel` tag (e.g. `v1.12.7-kernel`).
@@ -233,6 +234,10 @@ Override defaults with env vars or flags:
 ```bash
 # build-kernel.sh options
 GHCR_ORG=myorg TALOS_VERSION=v1.12.7 PKG_VERSION=v1.12.0-58-g86d6af1 INSTALLER_TAG=v1.12.7-k-macb \
+  ./scripts/build-kernel.sh
+
+# override patch source PR if needed
+GHCR_ORG=myorg TALOS_VERSION=v1.12.7 PKG_VERSION=v1.12.0-58-g86d6af1 PKGS_MACB_PR=1526 INSTALLER_TAG=v1.12.7-k-macb \
   ./scripts/build-kernel.sh
 
 # build-overlay.sh options

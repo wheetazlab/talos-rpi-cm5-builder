@@ -15,7 +15,7 @@
 #
 # Examples:
 #   ./scripts/build-kernel.sh
-#   ./scripts/build-kernel.sh --talos v1.12.7 --pkg-version v1.12.0-58-g86d6af1 --tag v1.12.7-k-macb
+#   ./scripts/build-kernel.sh --talos v1.12.7 --pkg-version v1.12.0-58-g86d6af1 --pkgs-pr 1526 --tag v1.12.7-k-macb
 # ------------------------------------------------------------------------------
 
 set -euo pipefail
@@ -25,6 +25,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 TALOS_VERSION="${TALOS_VERSION:-v1.12.7}"
 PKG_VERSION="${PKG_VERSION:-v1.12.0-58-g86d6af1}"
+PKGS_MACB_PR="${PKGS_MACB_PR:-1526}"
 INSTALLER_TAG="${INSTALLER_TAG:-${TALOS_VERSION}-k-macb}"
 GHCR_ORG="${GHCR_ORG:-wheetazlab}"
 REGISTRY="ghcr.io"
@@ -35,6 +36,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --talos)       TALOS_VERSION="$2";  shift 2 ;;
     --pkg-version) PKG_VERSION="$2";   shift 2 ;;
+    --pkgs-pr)     PKGS_MACB_PR="$2";  shift 2 ;;
     --tag)         INSTALLER_TAG="$2"; shift 2 ;;
     --org)         GHCR_ORG="$2";      shift 2 ;;
     --docker)      DOCKER="$2";        shift 2 ;;
@@ -45,6 +47,7 @@ Usage: $0 [options]
 Options:
   --talos VERSION       Talos version to build (default: ${TALOS_VERSION})
   --pkg-version VERSION siderolabs/pkgs branch/tag (default: ${PKG_VERSION})
+  --pkgs-pr NUMBER      siderolabs/pkgs PR with macb patches (default: ${PKGS_MACB_PR})
   --tag TAG             Output rpi-talos image tag (default: <talos>-k-macb)
   --org ORG             GHCR org/user (default: ${GHCR_ORG})
   --docker RUNTIME      docker or podman (default: ${DOCKER})
@@ -64,6 +67,7 @@ echo " build-kernel.sh"
 echo "============================================================"
 echo " Talos version    : ${TALOS_VERSION}"
 echo " pkgs version     : ${PKG_VERSION}"
+echo " pkgs macb PR     : #${PKGS_MACB_PR}"
 echo " Output tag       : ${INSTALLER_TAG}"
 echo " GHCR org         : ${GHCR_ORG}"
 echo " Container runtime: ${DOCKER}"
@@ -93,9 +97,13 @@ fi
 git -C "${CHECKOUTS_DIR}/pkgs" -c advice.detachedHead=false checkout "${PKGS_CHECKOUT}"
 
 echo ""
-echo "==> Copying macb patches into pkgs..."
-mkdir -p "${CHECKOUTS_DIR}/pkgs/kernel/build/patches"
-cp -v "${REPO_ROOT}/patches/linux/"*.patch "${CHECKOUTS_DIR}/pkgs/kernel/build/patches/"
+echo "==> Importing macb patches from siderolabs/pkgs PR #${PKGS_MACB_PR}..."
+git -C "${CHECKOUTS_DIR}/pkgs" fetch origin "pull/${PKGS_MACB_PR}/head:pr-macb"
+git -C "${CHECKOUTS_DIR}/pkgs" checkout pr-macb -- \
+  kernel/build/patches/0001-net-macb-flush-PCIe-posted-write-after-TSTART-doorbe.patch \
+  kernel/build/patches/0002-net-macb-re-check-ISR-after-IER-re-enable-in-macb_tx.patch \
+  kernel/build/patches/0003-net-macb-add-TX-stall-watchdog-as-defence-in-depth-s.patch
+ls -1 "${CHECKOUTS_DIR}/pkgs/kernel/build/patches/000"*-net-macb-*.patch
 
 echo ""
 echo "==> Building kernel OCI (this takes a while)..."
