@@ -68,6 +68,7 @@ jobs:
 
       - name: Clone sidero-community/sbc-raspberrypi at PR #88
         run: |
+          rm -rf sbc-raspberrypi
           git clone https://github.com/sidero-community/sbc-raspberrypi
           cd sbc-raspberrypi
           git fetch --depth=1 origin ${{ github.event.inputs.pr88_sha }} || true
