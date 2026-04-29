@@ -237,7 +237,7 @@ jobs:
 
           # Push via crane (already authenticated)
           crane push /tmp/installer.tar \
-            ghcr.io/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}
+            ghcr.io/${{ env.REGISTRY_USERNAME }}/talos-rpi-installer:${{ env.PATCHED_RELEASE_TAG }}
 
       - name: Upload disk image
         uses: actions/upload-artifact@v4
@@ -334,7 +334,7 @@ jobs:
           ### What's available
 
           - 📦 **`metal-arm64.raw.xz`** — disk image for CM4/CM5/Pi5
-          - ⚙️  **Installer:** `${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}`
+          - ⚙️  **Installer:** `${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-installer:${{ env.PATCHED_RELEASE_TAG }}`
 
           ### Install
 
@@ -344,7 +344,7 @@ jobs:
 
           - **Upgrade existing node**
             ```bash
-            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-cm5-installer:${{ env.PATCHED_RELEASE_TAG }}
+            talosctl upgrade --nodes <NODE_IP> --image ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/talos-rpi-installer:${{ env.PATCHED_RELEASE_TAG }}
             ```
 
           EOF

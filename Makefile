@@ -24,7 +24,7 @@ EXTRA_KERNEL_ARGS ?=
 
 # --- GHCR publish config -------------------------------------------------------
 GHCR_ORG        ?= wheetazlab
-GHCR_REPO       ?= talos-rpi-cm5-installer
+GHCR_REPO       ?= talos-rpi-installer
 # INSTALLER_TAG lets CI override the destination image tag (e.g. v1.12.6-lite)
 # without changing TALOS_VERSION which must match the upstream installer-base tag.
 INSTALLER_TAG   ?= $(TALOS_VERSION)
@@ -34,7 +34,7 @@ GHCR_IMAGE      := ghcr.io/$(GHCR_ORG)/$(GHCR_REPO):$(INSTALLER_TAG)
 # TAG is used for `make release` — override if you want a custom tag.
 # e.g. make release TAG=v1.12.6-1
 TAG             ?= $(TALOS_VERSION)
-GH_REPO         ?= $(GHCR_ORG)/talos-rpi-cm5-builder
+GH_REPO         ?= $(GHCR_ORG)/talos-rpi-builder
 
 # --- Image refs ----------------------------------------------------------------
 IMAGER_IMAGE        := ghcr.io/siderolabs/imager:$(TALOS_VERSION)

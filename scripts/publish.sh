@@ -12,7 +12,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TALOS_VERSION="${TALOS_VERSION:-v1.12.7}"
 DOCKER="${DOCKER:-podman}"
 GHCR_ORG="${GHCR_ORG:-wheetazlab}"
-GH_REPO="${GH_REPO:-${GHCR_ORG}/talos-rpi-cm5-builder}"
+GH_REPO="${GH_REPO:-${GHCR_ORG}/talos-rpi-builder}"
 PATCH_SUFFIX="${PATCH_SUFFIX:-k-macb}"
 PATCHED_RELEASE_TAG="${PATCHED_RELEASE_TAG:-${TALOS_VERSION}-${PATCH_SUFFIX}}"
 ARCH="${ARCH:-arm64}"
@@ -82,7 +82,7 @@ ISCSI_VERSION="$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' 
 UTIL_VERSION="$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 LINUX_KERNEL_VERSION="$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 
-NOTES_FILE="$(mktemp -t talos-rpi-cm5-notes.XXXXXX)"
+NOTES_FILE="$(mktemp -t talos-rpi-notes.XXXXXX)"
 trap 'rm -f "${NOTES_FILE}"' EXIT
 
 cat > "${NOTES_FILE}" <<EOF
@@ -120,7 +120,7 @@ Combines four independent layers on top of upstream Talos ${TALOS_VERSION}:
 ### What's available
 
 - 📦 **\`metal-arm64.raw.xz\`** — disk image for CM4/CM5/Pi5
-- ⚙️  **Installer:** \`ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}\`
+- ⚙️  **Installer:** \`ghcr.io/${GHCR_ORG}/talos-rpi-installer:${PATCHED_RELEASE_TAG}\`
 
 ### Install
 
@@ -130,7 +130,7 @@ Combines four independent layers on top of upstream Talos ${TALOS_VERSION}:
 
 - **Upgrade existing node**
   \`\`\`bash
-  talosctl upgrade --nodes <NODE_IP> --image ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}
+  talosctl upgrade --nodes <NODE_IP> --image ghcr.io/${GHCR_ORG}/talos-rpi-installer:${PATCHED_RELEASE_TAG}
   \`\`\`
 EOF
 

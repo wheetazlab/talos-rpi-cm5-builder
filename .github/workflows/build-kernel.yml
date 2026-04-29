@@ -68,7 +68,7 @@ jobs:
           echo "Disk after cleanup:"
           df -h
 
-      - name: Checkout talos-rpi-cm5-builder
+      - name: Checkout talos-rpi-builder
         uses: actions/checkout@v4
 
       - name: Set up Git identity (required for git am)

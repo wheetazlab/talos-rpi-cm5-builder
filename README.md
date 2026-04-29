@@ -1,8 +1,8 @@
-# talos-rpi-cm5-builder
+# talos-rpi-builder
 
-[![Build and Publish](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/publish.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/publish.yml)
-[![Build Kernel](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-kernel.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-kernel.yml)
-[![Build Overlay](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-overlay.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-cm5-builder/actions/workflows/build-overlay.yml)
+[![Build and Publish](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/publish.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/publish.yml)
+[![Build Kernel](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-kernel.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-kernel.yml)
+[![Build Overlay](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-overlay.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-overlay.yml)
 
 Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM4, CM5, and Pi 5** on CM4IO/CM5IO-compatible carrier boards (e.g. DeskPi Super6C).
 
@@ -195,7 +195,7 @@ After running, update `CUSTOM_OVERLAY_IMAGE` in the Makefile to the new tag.
 
 ### Download a release
 
-Download from the [Releases page](https://github.com/wheetazlab/talos-rpi-cm5-builder/releases):
+Download from the [Releases page](https://github.com/wheetazlab/talos-rpi-builder/releases):
 
 | File | For |
 |------|-----|
@@ -393,7 +393,7 @@ talosctl kubeconfig --nodes <CONTROLPLANE_IP> --talosconfig talosconfig
 To upgrade an existing node:
 
 ```bash
-talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-cm5-installer:v1.12.7-k-macb
+talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-installer:v1.12.7-k-macb
 ```
 
 ---
