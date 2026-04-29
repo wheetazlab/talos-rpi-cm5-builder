@@ -12,9 +12,9 @@ The build pipeline is fully self-contained — the kernel (`ghcr.io/wheetazlab/r
 
 ## Background
 
-Talos ≤ v1.12.2 could not boot on CM5 boards (Rev 1.1 / D0 BCM2712 stepping) due to a missing `bcm2712-rpi-cm5-*.dtb` and a broken `bcm2712d0.dtbo` overlay. This was resolved in [siderolabs/sbc-raspberrypi#79](https://github.com/siderolabs/sbc-raspberrypi/pull/79), merged Feb 2026, and first released as `sbc-raspberrypi v0.1.9`. This repo uses `v0.2.0` (latest).
+Talos ≤ v1.12.x could not boot on CM5 boards (Rev 1.1 / D0 BCM2712 stepping) due to a missing `bcm2712-rpi-cm5-*.dtb` and a broken `bcm2712d0.dtbo` overlay. This was resolved in [siderolabs/sbc-raspberrypi#79](https://github.com/siderolabs/sbc-raspberrypi/pull/79), merged Feb 2026, and first released as `sbc-raspberrypi v0.1.9`. This repo uses `v0.2.0` (latest).
 
-NVMe boot support is provided by a patched U-Boot baked into the custom `sbc-raspberrypi` overlay, sourced from [sidero-community/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88). PR #88 replaces the old NVMe-only patch with 14 comprehensive BCM2712/RP1 patches and unifies CM4/CM5 into a single `rpi_generic` installer overlay.
+NVMe boot support is provided by a patched U-Boot baked into the custom `sbc-raspberrypi` overlay, sourced from [sidero-community/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88) by [@appkins](https://github.com/appkins). PR #88 replaces the old NVMe-only patch with 14 comprehensive BCM2712/RP1 patches and unifies CM4/CM5 into a single `rpi_generic` installer overlay.
 
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
 
@@ -40,7 +40,7 @@ Three patches are applied to the standard Talos kernel (`patches/linux/`) to fix
 | `0002` | Re-check ISR after IER re-enable in `macb_tx_poll` |
 | `0003` | TX stall watchdog — defence-in-depth per-queue `delayed_work` |
 
-These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198). The canonical source used by this repo is [siderolabs/pkgs PR #1526](https://github.com/siderolabs/pkgs/pull/1526), pinned to its merge commit [`9a718f6`](https://github.com/siderolabs/pkgs/commit/9a718f6a64aaeb260a9e5182c93817676beff270) on `main`.
+These patches address [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198). The canonical source used by this repo is [siderolabs/pkgs PR #1526](https://github.com/siderolabs/pkgs/pull/1526) by [@lukaszraczylo](https://github.com/lukaszraczylo), pinned to its merge commit [`9a718f6`](https://github.com/siderolabs/pkgs/commit/9a718f6a64aaeb260a9e5182c93817676beff270) on `main`.
 
 ---
 
@@ -403,7 +403,7 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-installe
 **Talos / SBC**
 - [Talos Linux docs — SBC support](https://www.talos.dev/v1.12/talos-guides/install/single-board-computers/)
 - [sbc-raspberrypi releases](https://github.com/siderolabs/sbc-raspberrypi/releases)
-- [BCM2712/RP1 U-Boot + NVMe (sbc-raspberrypi PR #88)](https://github.com/siderolabs/sbc-raspberrypi/pull/88)
+- [BCM2712/RP1 U-Boot + NVMe (sbc-raspberrypi PR #88)](https://github.com/siderolabs/sbc-raspberrypi/pull/88) by [@appkins](https://github.com/appkins)
 - [CM5 boot issue fix (sbc-raspberrypi#79)](https://github.com/siderolabs/sbc-raspberrypi/pull/79)
 - [Original boot issue (talos#12748)](https://github.com/siderolabs/talos/issues/12748)
 - [Talos system extensions](https://www.talos.dev/v1.12/talos-guides/configuration/system-extensions/)
@@ -414,3 +414,11 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-installe
 - [cilium/cilium#43198 — related network stall](https://github.com/cilium/cilium/issues/43198)
 - [rpi-6.18.y macb EEE PR #7270](https://github.com/raspberrypi/linux/pull/7270)
 - [Patched kernel image comment (sbc-raspberrypi#91)](https://github.com/siderolabs/sbc-raspberrypi/issues/91#issuecomment-4316868066)
+- [siderolabs/pkgs PR #1526 — macb TX stall fixes](https://github.com/siderolabs/pkgs/pull/1526) by [@lukaszraczylo](https://github.com/lukaszraczylo)
+
+## Credits
+
+Upstream contributors whose work this repo packages:
+
+- [@appkins](https://github.com/appkins) — [siderolabs/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88) (BCM2712/RP1 U-Boot + NVMe boot, `rpi_generic` overlay supporting CM4/CM5/Pi 5)
+- [@lukaszraczylo](https://github.com/lukaszraczylo) — [siderolabs/pkgs PR #1526](https://github.com/siderolabs/pkgs/pull/1526) (3× `net: macb` TX stall fixes for the BCM2712 PCIe Ethernet controller)
