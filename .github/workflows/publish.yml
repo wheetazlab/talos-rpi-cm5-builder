@@ -303,6 +303,9 @@ jobs:
           > ⚠️ Experimental build — use at your own risk.
 
           Patched Talos build for **Raspberry Pi CM4, CM5, and Pi 5** boards.
+
+          A **single unified `metal-arm64.raw.xz`** that boots on CM4, CM5, *and* Pi 5 — same kernel, same initramfs, same DTB set, no per-board variants. This is made possible by [@appkins](https://github.com/appkins)'s [siderolabs/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88), which collapses what used to be separate overlays into one `rpi_generic` installer.
+
           Combines four independent layers on top of upstream Talos ${{ env.TALOS_VERSION }}:
 
           1. **Custom Linux kernel** (`${{ env.LINUX_KERNEL_VERSION }}`) — standard `siderolabs/pkgs` mainline kernel rebuilt with three `net: macb` patches targeting the BCM2712 PCIe Ethernet controller (patches by [@lukaszraczylo](https://github.com/lukaszraczylo), merged into `siderolabs/pkgs` as [PR #1526](https://github.com/siderolabs/pkgs/pull/1526) at commit [`9a718f6`](https://github.com/siderolabs/pkgs/commit/9a718f6a64aaeb260a9e5182c93817676beff270); addresses [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198)):

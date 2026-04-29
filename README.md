@@ -16,6 +16,8 @@ Talos ≤ v1.12.x could not boot on CM5 boards (Rev 1.1 / D0 BCM2712 stepping) d
 
 NVMe boot support is provided by a patched U-Boot baked into the custom `sbc-raspberrypi` overlay, sourced from [sidero-community/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88) by [@appkins](https://github.com/appkins). PR #88 replaces the old NVMe-only patch with 14 comprehensive BCM2712/RP1 patches and unifies CM4/CM5 into a single `rpi_generic` installer overlay.
 
+> **Huge thanks to [@appkins](https://github.com/appkins) for [sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88).** That PR is the *entire* reason this repo can ship a **single unified `metal-arm64.raw.xz`** that boots on CM4, CM5, **and** Pi 5 — same kernel, same initramfs, same DTB set, no per-board variants. Before PR #88, each board needed its own overlay/installer. Awesome work.
+
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
 
 ### CM5 microSD card-detect patch
