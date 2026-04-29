@@ -150,9 +150,9 @@ Manually-triggered workflow that builds and pushes `ghcr.io/<owner>/sbc-raspberr
 - `pr88_sha` — commit SHA in `sidero-community/sbc-raspberrypi` (default: PR #88 head)
 - `overlay_tag` — image tag to publish (default: `pr88`)
 
-The overlay build hard-patches `bcm2712-rpi-cm5.dtsi` to set `non-removable;` on `sdio1` before DTB compilation. This makes the empty-SD retry fix survive U-Boot DT handoff paths.
-
 After running, update `CUSTOM_OVERLAY_IMAGE` in the Makefile to the new tag.
+
+> **Note on CM5 SD slot:** Upstream `bcm2712-rpi-cm5.dtsi` already sets `broken-cd;` on `sdio1` (the microSD slot), which is correct for CM5's missing card-detect line. Do **not** add `non-removable;` — that forces the kernel to assume a card is permanently inserted and produces `mmc0: Timeout waiting for hardware cmd interrupt` boot loops when no microSD is present (e.g. NVMe-only boots).
 
 > **⚠️ Required GitHub permissions (org repos only)**
 >

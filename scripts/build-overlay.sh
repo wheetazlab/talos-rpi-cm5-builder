@@ -117,24 +117,6 @@ perl -i -pe "s|^(\s*raspberrypi_kernel_sha256:\s*).*$|\$1${RPI_DTB_SHA256}|" Pkg
 perl -i -pe "s|^(\s*raspberrypi_kernel_sha512:\s*).*$|\$1${RPI_DTB_SHA512}|" Pkgfile
 perl -i -pe "s|https://github.com/raspberrypi/linux/archive/refs/tags/\{\{ \.raspberrypi_kernel_version \}\}\.tar\.gz|https://github.com/raspberrypi/linux/archive/\{\{ .raspberrypi_kernel_version \}\}\.tar\.gz|g" artifacts/dtb/raspberrypi/pkg.yaml
 
-# Ensure CM5/CM5 Lite DTBs mark the SD host as non-removable at build time.
-# This survives U-Boot DT handoff paths where firmware dtparam mutations may be lost.
-mkdir -p artifacts/dtb/raspberrypi/patches
-cat > artifacts/dtb/raspberrypi/patches/0011-cm5-sd-non-removable.patch <<'PATCH'
-diff --git a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
-index c5c9abe9fda..0d3f5f4cb4d 100644
---- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
-+++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
-@@ -294,6 +294,7 @@
-	sd-uhs-ddr50;
-	sd-uhs-sdr104;
-	mmc-hs200-1_8v;
-+	non-removable;
- 	broken-cd;
- 	status = "okay";
- };
-PATCH
-
 # -- Build and push the overlay OCI ------------------------------------------
 
 echo ""
