@@ -18,6 +18,18 @@ NVMe boot support is provided by a patched U-Boot baked into the custom `sbc-ras
 
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
 
+### CM5 microSD card-detect patch
+
+The overlay build also injects [`patches/dtb/0011-cm5-sdio1-drop-broken-cd.patch`](patches/dtb/0011-cm5-sdio1-drop-broken-cd.patch), which removes `broken-cd;` from the `&sdio1` node in `bcm2712-rpi-cm5.dtsi`.
+
+**Why:** upstream `broken-cd;` causes the kernel to set `MMC_CAP_NEEDS_POLL`, which prevents `mmc_rescan()` from short-circuiting on an empty microSD slot. The kernel issues `CMD52` (SDIO probe) into nothing, `sdhci_timeout_timer()` fires after ~10s, and the SDHCI register dump (`mmc0: Timeout waiting for hardware cmd interrupt`) repeats every ~10s for the lifetime of the system on NVMe-only boots.
+
+The BCM2712 SDHCI controller has a working `SDHCI_CARD_PRESENT` bit and raises `SDHCI_INT_CARD_INSERT` / `REMOVE` on physical card transitions, so dropping `broken-cd;` silences the empty-slot loop while preserving hot-insert.
+
+**Carrier compatibility:** verified on CM4IO, CM5IO, and DeskPi Super6C. Carriers that don't wire microSD CD to the controller's native CD pin would need `cd-gpios = <...>;` (or to keep `broken-cd`) and should not use this overlay.
+
+The overlay build runs `patch --dry-run` against a fresh `raspberrypi/linux` checkout at `RPI_DTB_REF` to fail fast on context drift before invoking `make sbc-raspberrypi`.
+
 ### macb kernel patches
 
 Three patches are applied to the standard Talos kernel (`patches/linux/`) to fix silent TX stall issues on PCIe-attached macb ethernet (BCM2712/RP1):
@@ -68,7 +80,7 @@ Flash Raspberry Pi OS to an SD card, boot from it once (this automatically updat
 |-----------------------|----------------|
 | Talos Linux           | `v1.12.7`      |
 | Linux kernel          | standard `siderolabs/pkgs` mainline kernel + 3 macb patches |
-| SBC overlay           | `ghcr.io/wheetazlab/sbc-raspberrypi:pr88` (PR #88 — BCM2712/RP1 U-Boot + NVMe) |
+| SBC overlay           | `ghcr.io/wheetazlab/sbc-raspberrypi:pr88-cd1` (PR #88 + CM5 sdio1 broken-cd drop) |
 | iscsi-tools extension | `v0.2.0`       |
 | util-linux-tools      | `2.41.2`       |
 | Installer base        | `ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb` (built by `build-kernel.yml`) |
@@ -142,13 +154,15 @@ The standard image build pipeline. Assembles the disk image and upgrade installe
 
 ### Build Custom Overlay (`build-overlay.yml`)
 
-Manually-triggered workflow that builds and pushes `ghcr.io/<owner>/sbc-raspberrypi:<tag>` from the sidero-community PR #88 fork. Run this when PR #88 gets new commits or is merged upstream.
+Manually-triggered workflow that builds and pushes `ghcr.io/<owner>/sbc-raspberrypi:<tag>` from the sidero-community PR #88 fork. Run this when PR #88 gets new commits, when local DTB patches in [`patches/dtb/`](patches/dtb/) change, or when PR #88 is merged upstream.
 
 **Trigger:** Actions → Build Custom SBC Overlay → Run workflow
 
 **Inputs:**
 - `pr88_sha` — commit SHA in `sidero-community/sbc-raspberrypi` (default: PR #88 head)
-- `overlay_tag` — image tag to publish (default: `pr88`)
+- `overlay_tag` — image tag to publish (default: `pr88-cd1`)
+
+Local DTB patches under [`patches/dtb/`](patches/dtb/) are copied into the overlay's `artifacts/dtb/raspberrypi/patches/` directory before `make sbc-raspberrypi`. They are applied alphabetically along with PR #88's own patches — the `0011-` prefix ensures local patches land after upstream's `0006-` (eMMC slow-down). A `patch --dry-run` against a fresh `raspberrypi/linux` checkout at `RPI_DTB_REF` runs first to fail fast on context drift.
 
 After running, update `CUSTOM_OVERLAY_IMAGE` in the Makefile to the new tag.
 
@@ -221,7 +235,7 @@ make flash-sd DISK=/dev/rdisk4
 # 1. Build macb-patched kernel + installer-base → ghcr.io/<org>/rpi-talos:<tag>
 ./scripts/build-kernel.sh
 
-# 2. Build sbc-raspberrypi overlay → ghcr.io/<org>/sbc-raspberrypi:pr88
+# 2. Build sbc-raspberrypi overlay → ghcr.io/<org>/sbc-raspberrypi:pr88-cd1
 ./scripts/build-overlay.sh
 ```
 
@@ -283,7 +297,7 @@ make release      # GitHub release with .raw.xz artifact
 make build TALOS_VERSION=v1.12.7
 
 # Override overlay image
-make build CUSTOM_OVERLAY_IMAGE=ghcr.io/wheetazlab/sbc-raspberrypi:pr88
+make build CUSTOM_OVERLAY_IMAGE=ghcr.io/wheetazlab/sbc-raspberrypi:pr88-cd1
 
 # Extra kernel args
 make build EXTRA_KERNEL_ARGS='--extra-kernel-arg=cma=256M --extra-kernel-arg=hugepages=64'

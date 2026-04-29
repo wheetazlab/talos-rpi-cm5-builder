@@ -17,9 +17,9 @@ on:
         required: false
         default: 'e5ab77462b5ed1ee594ae71f35c0262b51a72524'
       overlay_tag:
-        description: 'Tag for the overlay image (e.g. pr88, pr88-2, latest)'
+        description: 'Tag for the overlay image (e.g. pr88-cd1, pr88-cd2, latest)'
         required: false
-        default: 'pr88'
+        default: 'pr88-cd1'
       uboot_version:
         description: 'u-boot/u-boot source version (for u-boot-<ver>.tar.bz2)'
         required: false
