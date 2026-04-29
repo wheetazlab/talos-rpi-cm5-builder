@@ -120,19 +120,19 @@ perl -i -pe "s|https://github.com/raspberrypi/linux/archive/refs/tags/\{\{ \.ras
 # Ensure CM5/CM5 Lite DTBs mark the SD host as non-removable at build time.
 # This survives U-Boot DT handoff paths where firmware dtparam mutations may be lost.
 mkdir -p artifacts/dtb/raspberrypi/patches
-cat > artifacts/dtb/raspberrypi/patches/0001-cm5-sd-non-removable.patch <<'PATCH'
+cat > artifacts/dtb/raspberrypi/patches/0011-cm5-sd-non-removable.patch <<'PATCH'
 diff --git a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
-index 8afb7068b2e4..2f4202f8f5da 100644
+index c5c9abe9fda..0d3f5f4cb4d 100644
 --- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
 +++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
-@@ -265,6 +265,7 @@
- 	mmc-hs200-1_8v;
- 	mmc-hs400-1_8v;
- 	mmc-hs400-enhanced-strobe;
+@@ -294,6 +294,7 @@
+	sd-uhs-ddr50;
+	sd-uhs-sdr104;
+	mmc-hs200-1_8v;
 +	non-removable;
  	broken-cd;
- 	supports-cqe = <1>;
  	status = "okay";
+ };
 PATCH
 
 # -- Build and push the overlay OCI ------------------------------------------
