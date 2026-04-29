@@ -97,7 +97,13 @@ Images are built automatically on GitHub Actions using a native **Ubuntu arm64**
 
 All workflow files use `github.repository_owner` for all GHCR paths — they are fully portable. Forks automatically publish to the forker's own GHCR namespace.
 
-### Build Patched Kernel (`build-kernel.yml`)
+> **Run order matters.** `publish.yml` consumes pre-built images from the other two workflows. On a fresh fork or after any patch/version change, always run in this order:
+>
+> **Step 1 → `build-kernel.yml`** (patched kernel + installer base)
+> **Step 2 → `build-overlay.yml`** (custom sbc-raspberrypi overlay with DTB patches)
+> **Step 3 → `publish.yml`** (disk image + installer OCI + GitHub release)
+
+### Step 1 — Build Patched Kernel (`build-kernel.yml`)
 
 Builds the custom installer-base OCI image that `publish.yml` consumes. Run this first whenever you bump Talos or want to update the macb patches.
 
@@ -127,34 +133,10 @@ Also triggers on push of a `v*-kernel` tag (e.g. `v1.12.7-kernel`).
 **Update flow for a new Talos version:**
 1. Update `TALOS_VERSION`, `CUSTOM_INSTALLER_BASE` in `Makefile` and `scripts/build.sh`
 2. Trigger `build-kernel.yml` with the new version inputs
-3. Tag + push → `publish.yml` runs automatically
+3. Trigger `build-overlay.yml` if DTB patches or the overlay need updating
+4. Tag + push → `publish.yml` runs automatically
 
-### Build and Publish (`publish.yml`)
-
-The standard image build pipeline. Assembles the disk image and upgrade installer using the pre-built kernel installer base.
-
-**Triggers:**
-- Push a version tag (e.g. `git tag v1.12.7 && git push --tags`) → full build + publish
-- Manual run via **Actions → Build and Publish → Run workflow**
-
-**Workflow dispatch inputs:**
-
-| Input | Default | Description |
-|-------|---------|-------------|
-| `talos_version` | _(from Makefile)_ | Override Talos version |
-| `extra_kernel_args` | _(empty)_ | Space-separated `key=value` kernel args (e.g. `cma=256M hugepages=64`) |
-| `extra_extensions` | _(empty)_ | Extra extension image refs on top of the two defaults |
-
-**Pipeline jobs:**
-1. **`resolve-version`** — resolves Talos version, reads `CUSTOM_INSTALLER_BASE` and `CUSTOM_OVERLAY_IMAGE` from Makefile; forwards `extra_kernel_args` and `extra_extensions`
-2. **`build`** — resolves extension images to digests via `crane digest` for reproducible builds, then:
-   - Builds disk image (`make build`)
-   - Builds installer OCI (`make installer`)
-   - Pushes installer to GHCR tagged `:vX.Y.Z-rpi-kernel`
-   - Uploads `metal-arm64.raw.xz` as artifact
-3. **`release`** — downloads artifact and creates the GitHub release
-
-### Build Custom Overlay (`build-overlay.yml`)
+### Step 2 — Build Custom Overlay (`build-overlay.yml`)
 
 Manually-triggered workflow that builds and pushes `ghcr.io/<owner>/sbc-raspberrypi:<tag>` from the sidero-community PR #88 fork. Run this when PR #88 gets new commits, when local DTB patches in [`patches/dtb/`](patches/dtb/) change, or when PR #88 is merged upstream.
 
@@ -181,6 +163,31 @@ After running, update `CUSTOM_OVERLAY_IMAGE` in the Makefile to the new tag.
 >   --field can_approve_pull_request_reviews=true
 > ```
 > This only needs to be set once per organization.
+
+### Step 3 — Build and Publish (`publish.yml`)
+
+Assembles the disk image and upgrade installer using the pre-built kernel and overlay from Steps 1 and 2. **Do not run this until both prior steps have completed successfully and `CUSTOM_INSTALLER_BASE` / `CUSTOM_OVERLAY_IMAGE` in the Makefile point to the correct tags.**
+
+**Triggers:**
+- Push a version tag (e.g. `git tag v1.12.7 && git push --tags`) → full build + publish
+- Manual run via **Actions → Build and Publish → Run workflow**
+
+**Workflow dispatch inputs:**
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `talos_version` | _(from Makefile)_ | Override Talos version |
+| `extra_kernel_args` | _(empty)_ | Space-separated `key=value` kernel args (e.g. `cma=256M hugepages=64`) |
+| `extra_extensions` | _(empty)_ | Extra extension image refs on top of the two defaults |
+
+**Pipeline jobs:**
+1. **`resolve-version`** — resolves Talos version, reads `CUSTOM_INSTALLER_BASE` and `CUSTOM_OVERLAY_IMAGE` from Makefile; forwards `extra_kernel_args` and `extra_extensions`
+2. **`build`** — resolves extension images to digests via `crane digest` for reproducible builds, then:
+   - Builds disk image (`make build`)
+   - Builds installer OCI (`make installer`)
+   - Pushes installer to GHCR tagged `:vX.Y.Z-talos-rpi`
+   - Uploads `metal-arm64.raw.xz` as artifact
+3. **`release`** — downloads artifact and creates the GitHub release
 
 ---
 
