@@ -130,7 +130,7 @@ release:
 	gh release create $(TAG) $(XZ_IMAGE) \
 		--repo $(GH_REPO) \
 		--title "Talos $(TALOS_VERSION) for Raspberry Pi CM5" \
-		--notes "Custom Talos Linux image for Raspberry Pi CM4/CM5 (rpi_generic overlay — CM4IO/CM5IO/Pi5 compatible).\n\nIncludes:\n- sbc-raspberrypi overlay: $(CUSTOM_OVERLAY_IMAGE) (PR #88 + CM5 sdio1 broken-cd drop)\n- iscsi-tools: $(ISCSI_TOOLS_VERSION)\n- util-linux-tools: $(UTIL_LINUX_VERSION)\n\nInstaller image: $(GHCR_IMAGE)\n\nFlash with:\n\`\`\`\nxzcat metal-$(ARCH).raw.xz | sudo dd of=/dev/rdiskN bs=4m\n\`\`\`"
+             --notes "Custom Talos Linux image for Raspberry Pi CM4/CM5/Pi 4/Pi 5 (rpi_generic overlay — CM4IO/CM5IO/Pi 4/Pi 5 compatible).\n\nIncludes:\n- sbc-raspberrypi overlay: $(CUSTOM_OVERLAY_IMAGE) (PR #88 + CM5 sdio1 broken-cd drop)\n- iscsi-tools: $(ISCSI_TOOLS_VERSION)\n- util-linux-tools: $(UTIL_LINUX_VERSION)\n\nInstaller image: $(GHCR_IMAGE)\n\nFlash with:\n\`\`\`\nxzcat metal-$(ARCH).raw.xz | sudo dd of=/dev/rdiskN bs=4m\n\`\`\`"
 	@echo "==> Release created!"
 
 ## publish: Full pipeline — build image, build installer, push to GHCR, create release

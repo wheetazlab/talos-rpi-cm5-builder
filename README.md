@@ -4,9 +4,9 @@
 [![Build Kernel](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-kernel.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-kernel.yml)
 [![Build Overlay](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-overlay.yml/badge.svg)](https://github.com/wheetazlab/talos-rpi-builder/actions/workflows/build-overlay.yml)
 
-Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM4, CM5, and Pi 5** on CM4IO/CM5IO-compatible carrier boards (e.g. DeskPi Super6C).
+Custom [Talos Linux](https://www.talos.dev/) image builder for **Raspberry Pi CM4, CM5, Pi 4, and Pi 5** on CM4IO/CM5IO-compatible carrier boards (e.g. DeskPi Super6C).
 
-Builds a single `rpi_generic` image that works across CM4, CM5, and Pi 5 boards.
+Builds a single `rpi_generic` image that works across CM4, CM5, Pi 4, and Pi 5 boards.
 
 The build pipeline is fully self-contained — the kernel (`ghcr.io/wheetazlab/rpi-talos`) is built from source via `build-kernel.yml`, using the standard `siderolabs/pkgs` kernel with three macb ethernet patches imported directly from `siderolabs/pkgs` main at commit [`9a718f6`](https://github.com/siderolabs/pkgs/commit/9a718f6a64aaeb260a9e5182c93817676beff270) (PR #1526 merge). The disk image is assembled by `publish.yml` using that kernel image plus a custom `sbc-raspberrypi` overlay (full BCM2712/RP1 U-Boot with NVMe/PCIe support, unified `rpi_generic` installer), `iscsi-tools`, and `util-linux-tools`.
 
@@ -16,7 +16,7 @@ Talos ≤ v1.12.x could not boot on CM5 boards (Rev 1.1 / D0 BCM2712 stepping) d
 
 NVMe boot support is provided by a patched U-Boot baked into the custom `sbc-raspberrypi` overlay, sourced from [sidero-community/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88) by [@appkins](https://github.com/appkins). PR #88 replaces the old NVMe-only patch with 14 comprehensive BCM2712/RP1 patches and unifies CM4/CM5 into a single `rpi_generic` installer overlay.
 
-> **Huge thanks to [@appkins](https://github.com/appkins) for [sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88).** That PR is the *entire* reason this repo can ship a **single unified `metal-arm64.raw.xz`** that boots on CM4, CM5, **and** Pi 5 — same kernel, same initramfs, same DTB set, no per-board variants. Before PR #88, each board needed its own overlay/installer. Awesome work.
+> **Huge thanks to [@appkins](https://github.com/appkins) for [sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88).** That PR is the *entire* reason this repo can ship a **single unified `metal-arm64.raw.xz`** that boots on CM4, CM5, Pi 4, **and** Pi 5 — same kernel, same initramfs, same DTB set, no per-board variants. Before PR #88, each board needed its own overlay/installer. PR #88 collapses BCM2711 (CM4/Pi 4) and BCM2712 (CM5/Pi 5) support into one `rpi_generic` installer. Awesome work.
 
 Reference issue: [siderolabs/talos#12748](https://github.com/siderolabs/talos/issues/12748)
 
@@ -201,7 +201,7 @@ Download from the [Releases page](https://github.com/wheetazlab/talos-rpi-builde
 
 | File | For |
 |------|-----|
-| `metal-arm64.raw.xz` | CM4, CM5, Pi 5 (all variants) |
+| `metal-arm64.raw.xz` | CM4, CM5, Pi 4, Pi 5 (all variants) |
 
 ### Flash to SD card / eMMC
 
@@ -360,6 +360,8 @@ make help           Show all targets and version variables
 - Talos Linux kernel + initramfs (arm64) — from `ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb` (standard `siderolabs/pkgs` mainline kernel, built by `build-kernel.yml` with 3 macb patches applied)
 - **Patched U-Boot** (BCM2712/RP1) from `ghcr.io/wheetazlab/sbc-raspberrypi:pr88` (PR #88 patch set — NVMe/PCIe, EEE LPI, MACB driver)
 - DTBs from custom `sbc-raspberrypi` overlay (`rpi_generic` installer):
+  - `bcm2711-rpi-4-b.dtb` ← Pi 4 Model B
+  - `bcm2711-rpi-cm4.dtb` ← CM4 (CM4IO and compatible carriers)
   - `bcm2712-rpi-cm5-cm4io.dtb` ← CM4IO-compatible carriers (e.g. DeskPi Super6C)
   - `bcm2712-rpi-cm5-cm5io.dtb`
   - `bcm2712-rpi-cm5l-cm4io.dtb`
@@ -368,7 +370,7 @@ make help           Show all targets and version variables
   - `bcm2712d0-rpi-5-b.dtb`
 - System extension: `iscsi-tools v0.2.0`
 - System extension: `util-linux-tools 2.41.2`
-- Kernel arg: _(none — single image supports all CM4/CM5/Pi5 variants)
+- Kernel arg: _(none — single image supports all CM4/CM5/Pi 4/Pi 5 variants)
 
 ---
 
@@ -422,5 +424,5 @@ talosctl upgrade --nodes <NODE_IP> --image ghcr.io/wheetazlab/talos-rpi-installe
 
 Upstream contributors whose work this repo packages:
 
-- [@appkins](https://github.com/appkins) — [siderolabs/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88) (BCM2712/RP1 U-Boot + NVMe boot, `rpi_generic` overlay supporting CM4/CM5/Pi 5)
+- [@appkins](https://github.com/appkins) — [siderolabs/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88) (BCM2712/RP1 U-Boot + NVMe boot, `rpi_generic` overlay supporting CM4/CM5/Pi 4/Pi 5)
 - [@lukaszraczylo](https://github.com/lukaszraczylo) — [siderolabs/pkgs PR #1526](https://github.com/siderolabs/pkgs/pull/1526) (3× `net: macb` TX stall fixes for the BCM2712 PCIe Ethernet controller)

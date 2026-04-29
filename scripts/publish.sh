@@ -88,9 +88,9 @@ trap 'rm -f "${NOTES_FILE}"' EXIT
 cat > "${NOTES_FILE}" <<EOF
 > ⚠️ Experimental build — use at your own risk.
 
-Patched Talos build for **Raspberry Pi CM4, CM5, and Pi 5** boards.
+Patched Talos build for **Raspberry Pi CM4, CM5, Pi 4, and Pi 5** boards.
 
-A **single unified \`metal-arm64.raw.xz\`** that boots on CM4, CM5, *and* Pi 5 — same kernel, same initramfs, same DTB set, no per-board variants. This is made possible by [@appkins](https://github.com/appkins)'s [siderolabs/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88), which collapses what used to be separate overlays into one \`rpi_generic\` installer.
+A **single unified \`metal-arm64.raw.xz\`** that boots on CM4, CM5, Pi 4, *and* Pi 5 — same kernel, same initramfs, same DTB set, no per-board variants. This is made possible by [@appkins](https://github.com/appkins)'s [siderolabs/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88), which collapses BCM2711 (CM4/Pi 4) and BCM2712 (CM5/Pi 5) support into one \`rpi_generic\` installer.
 
 Combines four independent layers on top of upstream Talos ${TALOS_VERSION}:
 
@@ -119,10 +119,11 @@ Combines four independent layers on top of upstream Talos ${TALOS_VERSION}:
 - Raspberry Pi CM5 (CM5IO, CM4IO-compatible carriers e.g. DeskPi Super6C)
 - Raspberry Pi CM4 (CM4IO and compatible carriers)
 - Raspberry Pi 5
+- Raspberry Pi 4 Model B
 
 ### What's available
 
-- 📦 **\`metal-arm64.raw.xz\`** — disk image for CM4/CM5/Pi5
+- 📦 **\`metal-arm64.raw.xz\`** — disk image for CM4/CM5/Pi 4/Pi 5
 - ⚙️  **Installer:** \`ghcr.io/${GHCR_ORG}/talos-rpi-installer:${PATCHED_RELEASE_TAG}\`
 
 ### Install
