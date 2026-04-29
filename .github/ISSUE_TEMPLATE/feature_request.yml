@@ -1,0 +1,39 @@
+name: Feature Request
+description: Suggest a new board, extension, or capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      placeholder: e.g. "I have a CM5 on a Waveshare board and the ethernet doesn't come up because it uses a different PHY"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+      placeholder: e.g. "Add support for the Waveshare CM4-NANO-B carrier board"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - New board / carrier support
+        - Kernel patch / driver
+        - Extension (add new extension to default image)
+        - Build system / workflow
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links to datasheets, upstream PRs, kernel patches, or related issues that are relevant.

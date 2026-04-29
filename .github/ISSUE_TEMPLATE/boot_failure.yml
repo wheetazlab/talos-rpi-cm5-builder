@@ -1,0 +1,90 @@
+name: Boot Failure
+description: Node won't boot — stuck at U-Boot, blank screen, or kernel panic
+labels: ["boot-failure"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > ⚠️ **Check EEPROM first.** Most CM4/CM5 boot failures are caused by outdated bootloader firmware. See the [EEPROM requirement](https://github.com/wheetazlab/talos-rpi-builder#-eeprom-requirement) in the README before filing.
+
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware
+      options:
+        - CM5 on DeskPi Super6C
+        - CM5 on CM5IO board
+        - CM5 on other carrier
+        - CM4 on DeskPi Super6C
+        - CM4 on CM4IO board
+        - CM4 on other carrier
+        - Raspberry Pi 5
+        - Raspberry Pi 4
+    validations:
+      required: true
+
+  - type: input
+    id: carrier
+    attributes:
+      label: Carrier board (if not listed above)
+      placeholder: e.g. Waveshare CM4-NANO-B
+
+  - type: dropdown
+    id: boot_method
+    attributes:
+      label: Boot method
+      options:
+        - NVMe direct boot
+        - SD card boot
+        - PXE
+        - USB
+    validations:
+      required: true
+
+  - type: input
+    id: installer_tag
+    attributes:
+      label: Installer image / disk image used
+      placeholder: e.g. ghcr.io/wheetazlab/talos-rpi-installer:v1.12.7-talos-rpi
+    validations:
+      required: true
+
+  - type: input
+    id: eeprom
+    attributes:
+      label: EEPROM version
+      description: Run `vcgencmd bootloader_version` or `sudo rpi-eeprom-update` from Raspberry Pi OS
+      placeholder: e.g. 2024-11-12
+    validations:
+      required: true
+
+  - type: dropdown
+    id: failure_stage
+    attributes:
+      label: Where does it fail?
+      options:
+        - Never shows U-Boot output (blank / no output)
+        - U-Boot starts but hangs before loading kernel
+        - Kernel starts but panics / crashes early
+        - Talos boots but node never joins cluster
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: serial_output
+    attributes:
+      label: Serial / UART output
+      description: |
+        Connect a UART adapter to the debug console and paste the full output.
+        CM4/CM5 debug UART is on GPIO 14/15 (pins 8/10), 115200 baud.
+        This is the single most useful thing you can provide.
+      render: shell
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What did you try?
+      placeholder: Steps taken, things you've already ruled out, any changes from default config.
+    validations:
+      required: true

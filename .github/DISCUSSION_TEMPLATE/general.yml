@@ -1,0 +1,45 @@
+title: "[General] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Welcome 👋
+
+        This is the place for questions, show-and-tell, and general discussion about `talos-rpi-builder`.
+
+        **Before posting**, please check:
+        - 📖 [README](https://github.com/wheetazlab/talos-rpi-builder#readme) — setup, EEPROM requirement, build instructions
+        - ⚠️ [EEPROM Requirement](https://github.com/wheetazlab/talos-rpi-builder#-eeprom-requirement) — most CM4/CM5 boot failures are outdated bootloader firmware
+        - 🐛 [Open Issues](https://github.com/wheetazlab/talos-rpi-builder/issues) — your problem may already be tracked
+
+        ---
+
+        ### Tested hardware (as of v1.12.7)
+
+        | Hardware | Boot | Status |
+        |---|---|---|
+        | CM5 on DeskPi Super6C | NVMe | ✅ Verified |
+        | CM4 on DeskPi Super6C | NVMe | ✅ Verified |
+        | CM5 on CM5IO | SD card | ✅ Verified |
+        | CM4 on CM4IO | SD card | ✅ Verified |
+        | RPi 5 / RPi 4 standalone | — | Supported by overlay, not personally verified |
+        | PXE | — | Not tested |
+
+        ### What's in the image
+
+        - **Unified `rpi_generic` overlay** — single image boots CM4, CM5, Pi 4, Pi 5 (via [sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88) by [@appkins](https://github.com/appkins))
+        - **macb ethernet fix** — 3 kernel patches for PCIe TX stall on BCM2712 (from [pkgs#1526](https://github.com/siderolabs/pkgs/pull/1526) by [@lukaszraczylo](https://github.com/lukaszraczylo))
+        - **CM5 mmc0 timeout fix** — drops `broken-cd;` from CM5 DTB to silence perpetual SDHCI errors on NVMe-only boots
+        - **Extensions** — `iscsi-tools` + `util-linux-tools` baked in (Longhorn/CephFS ready)
+
+        ---
+
+        Feel free to share your hardware setup, ask questions, or post build reports below.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question or post
+    validations:
+      required: true

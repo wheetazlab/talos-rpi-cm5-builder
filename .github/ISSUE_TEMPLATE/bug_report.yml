@@ -1,0 +1,87 @@
+name: Bug Report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing — please check the [EEPROM requirement](https://github.com/wheetazlab/talos-rpi-builder#-eeprom-requirement) in the README. An outdated bootloader causes ~30% of reported boot failures.
+
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware
+      options:
+        - CM5 on DeskPi Super6C
+        - CM5 on CM5IO board
+        - CM5 on other carrier
+        - CM4 on DeskPi Super6C
+        - CM4 on CM4IO board
+        - CM4 on other carrier
+        - Raspberry Pi 5
+        - Raspberry Pi 4
+    validations:
+      required: true
+
+  - type: input
+    id: carrier
+    attributes:
+      label: Carrier board (if not listed above)
+      placeholder: e.g. Waveshare CM4-NANO-B
+
+  - type: dropdown
+    id: boot_method
+    attributes:
+      label: Boot method
+      options:
+        - NVMe direct boot
+        - SD card boot
+        - PXE
+        - USB
+    validations:
+      required: true
+
+  - type: input
+    id: talos_version
+    attributes:
+      label: Talos version
+      placeholder: e.g. v1.12.7
+    validations:
+      required: true
+
+  - type: input
+    id: installer_tag
+    attributes:
+      label: Installer image tag used
+      placeholder: e.g. ghcr.io/wheetazlab/talos-rpi-installer:v1.12.7-talos-rpi
+
+  - type: input
+    id: eeprom
+    attributes:
+      label: EEPROM version (CM4/CM5 only)
+      description: Output of `sudo rpi-eeprom-update` or `vcgencmd bootloader_version`
+      placeholder: e.g. 2024-11-12
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      placeholder: Describe the bug clearly — what did you expect vs what occurred.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dmesg
+    attributes:
+      label: Relevant dmesg / talosctl output
+      description: Run `talosctl dmesg --nodes <IP>` or attach full kernel log. Wrap in code fences.
+      render: shell
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Flash metal-arm64.raw.xz to NVMe
+        2. Boot CM5
+        3. ...

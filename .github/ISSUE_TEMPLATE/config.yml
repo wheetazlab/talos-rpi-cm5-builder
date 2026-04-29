@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/wheetazlab/talos-rpi-builder/discussions
+    about: Questions, show-and-tell, and general help — use Discussions instead of Issues
