@@ -80,21 +80,34 @@ make push-installer DOCKER="${DOCKER}" TALOS_VERSION="${TALOS_VERSION}" INSTALLE
 
 ISCSI_VERSION="$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 UTIL_VERSION="$(grep '^UTIL_LINUX_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
+LINUX_KERNEL_VERSION="$(grep '^LINUX_KERNEL_VERSION' Makefile | awk -F'?=' '{print $2}' | tr -d ' ')"
 
-NOTES=$(cat <<EOF
-> ⚠️ Experimental build, use at your own risk.
+NOTES_FILE="$(mktemp -t talos-rpi-cm5-notes.XXXXXX)"
+trap 'rm -f "${NOTES_FILE}"' EXIT
 
-This is a patched Talos build for **Raspberry Pi CM4 and CM5** boards.
-Uses the \`rpi_generic\` overlay (PR #88) which supports CM4IO/CM5IO carriers and Pi 5.
+cat > "${NOTES_FILE}" <<EOF
+> ⚠️ Experimental build — use at your own risk.
+
+Patched Talos build for **Raspberry Pi CM4, CM5, and Pi 5** boards.
+Combines four independent layers on top of upstream Talos ${TALOS_VERSION}:
+
+1. **Custom Linux kernel** (\`${LINUX_KERNEL_VERSION}\`) — standard \`siderolabs/pkgs\` mainline kernel rebuilt with three \`net: macb\` patches targeting the BCM2712 PCIe Ethernet controller (patches by [@lukaszraczylo](https://github.com/lukaszraczylo), merged into \`siderolabs/pkgs\` as [PR #1526](https://github.com/siderolabs/pkgs/pull/1526) at commit [\`9a718f6\`](https://github.com/siderolabs/pkgs/commit/9a718f6a64aaeb260a9e5182c93817676beff270); addresses [sbc-raspberrypi#82](https://github.com/siderolabs/sbc-raspberrypi/issues/82) / [sbc-raspberrypi#91](https://github.com/siderolabs/sbc-raspberrypi/issues/91) / [cilium#43198](https://github.com/cilium/cilium/issues/43198)):
+   - \`net: macb: flush PCIe posted write after TSTART doorbell\` — prevents TX hangs caused by posted-write reordering across the PCIe bridge.
+   - \`net: macb: re-check ISR after IER re-enable in macb_tx_poll\` — closes a race window where a TX interrupt fires between ISR read and IER re-enable, masking the event.
+   - \`net: macb: add TX stall watchdog\` — defence-in-depth safety net that kicks the TX path if all three patches fail to prevent a stall in a given edge case.
+2. **\`rpi_generic\` SBC overlay** (\`${CUSTOM_OVERLAY_IMAGE}\`, [siderolabs/sbc-raspberrypi PR #88](https://github.com/siderolabs/sbc-raspberrypi/pull/88)) — U-Boot + RP1/BCM2712 device-tree support enabling NVMe boot, CM4IO/CM5IO carrier boards, and Pi 5 single-board form factor.
+3. **CM5 SD card-detect DTB patch** — drops \`broken-cd;\` from the \`&sdio1\` node in \`bcm2712-rpi-cm5.dtsi\` (injected at overlay build time as \`0011-cm5-sdio1-drop-broken-cd.patch\`). Upstream \`broken-cd;\` forces \`MMC_CAP_NEEDS_POLL\`, which prevents \`mmc_rescan()\` from short-circuiting on an empty microSD slot and produces a perpetual \`mmc0: Timeout waiting for hardware cmd interrupt\` log loop on NVMe-only boots. The BCM2712 SDHCI controller's native \`SDHCI_CARD_PRESENT\` bit and \`CARD_INSERT/REMOVE\` interrupts handle empty-slot quiet and hot-insert correctly without \`broken-cd\`. Verified on CM4IO, CM5IO, and DeskPi Super6C.
+4. **Extensions** — \`iscsi-tools\` (iSCSI initiator for Longhorn/OpenEBS) and \`util-linux-tools\` (loopback/filesystem utilities) baked in at digest-pinned versions.
 
 ### Components
 
 | Component | Version / Image |
 |-----------|------------------|
-| Imager | \`ghcr.io/siderolabs/imager:${TALOS_VERSION}\` |
-| Installer base | \`${CUSTOM_INSTALLER_BASE}\` (standard Talos kernel + 3 macb patches) |
 | Talos | \`${TALOS_VERSION}\` |
-| SBC overlay | \`${CUSTOM_OVERLAY_IMAGE}\` (PR #88 — BCM2712/RP1 U-Boot + NVMe, rpi_generic) |
+| Imager | \`ghcr.io/siderolabs/imager:${TALOS_VERSION}\` |
+| Installer base | \`${CUSTOM_INSTALLER_BASE}\` |
+| Kernel | Linux ${LINUX_KERNEL_VERSION} (3× macb PCIe patches) |
+| SBC overlay | \`${CUSTOM_OVERLAY_IMAGE}\` (rpi_generic — PR #88 + CM5 sdio1 broken-cd drop) |
 | iscsi-tools | \`ghcr.io/siderolabs/iscsi-tools:${ISCSI_VERSION}\` |
 | util-linux-tools | \`ghcr.io/siderolabs/util-linux-tools:${UTIL_VERSION}\` |
 
@@ -120,7 +133,6 @@ Uses the \`rpi_generic\` overlay (PR #88) which supports CM4IO/CM5IO carriers an
   talosctl upgrade --nodes <NODE_IP> --image ghcr.io/${GHCR_ORG}/talos-rpi-cm5-installer:${PATCHED_RELEASE_TAG}
   \`\`\`
 EOF
-)
 
 PRERELEASE_FLAG=""
 if [[ "${TALOS_VERSION}" =~ -(alpha|beta|rc)\. ]]; then
@@ -134,7 +146,7 @@ gh release create \
   --repo "${GH_REPO}" \
   --title "${PATCHED_RELEASE_TAG}" \
   ${PRERELEASE_FLAG} \
-  --notes "${NOTES}"
+  --notes-file "${NOTES_FILE}"
 
 popd >/dev/null
 
