@@ -19,11 +19,8 @@ DOCKER      ?= podman
 TTY_FLAG    := $(shell [ -t 0 ] && echo "-t" || echo "")
 
 # Extra kernel args — pass as a space-separated list of --extra-kernel-arg="..." flags
-# Default disables continuous MMC polling, which prevents repeated timeout spam
-# on systems with no SD media present while still allowing SD boot when card is
-# already present at boot.
 # e.g. make build EXTRA_KERNEL_ARGS='--extra-kernel-arg=cma=256M --extra-kernel-arg=hugepages=64'
-EXTRA_KERNEL_ARGS ?= --extra-kernel-arg=mmc_core.polling=0
+EXTRA_KERNEL_ARGS ?=
 
 # --- GHCR publish config -------------------------------------------------------
 GHCR_ORG        ?= wheetazlab

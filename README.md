@@ -128,7 +128,7 @@ The standard image build pipeline. Assembles the disk image and upgrade installe
 | Input | Default | Description |
 |-------|---------|-------------|
 | `talos_version` | _(from Makefile)_ | Override Talos version |
-| `extra_kernel_args` | `mmc_core.polling=0` | Space-separated `key=value` kernel args (e.g. `cma=256M hugepages=64`) |
+| `extra_kernel_args` | _(empty)_ | Space-separated `key=value` kernel args (e.g. `cma=256M hugepages=64`) |
 | `extra_extensions` | _(empty)_ | Extra extension image refs on top of the two defaults |
 
 **Pipeline jobs:**
@@ -151,8 +151,6 @@ Manually-triggered workflow that builds and pushes `ghcr.io/<owner>/sbc-raspberr
 - `overlay_tag` — image tag to publish (default: `pr88`)
 
 After running, update `CUSTOM_OVERLAY_IMAGE` in the Makefile to the new tag.
-
-> **Note on CM5 SD slot:** Upstream `bcm2712-rpi-cm5.dtsi` already sets `broken-cd;` on `sdio1` (the microSD slot), which is correct for CM5's missing card-detect line. Do **not** add `non-removable;` — that forces the kernel to assume a card is permanently inserted and produces `mmc0: Timeout waiting for hardware cmd interrupt` boot loops when no microSD is present (e.g. NVMe-only boots).
 
 > **⚠️ Required GitHub permissions (org repos only)**
 >
@@ -289,9 +287,6 @@ make build CUSTOM_OVERLAY_IMAGE=ghcr.io/wheetazlab/sbc-raspberrypi:pr88
 
 # Extra kernel args
 make build EXTRA_KERNEL_ARGS='--extra-kernel-arg=cma=256M --extra-kernel-arg=hugepages=64'
-
-# Keep default anti-spam behavior while adding args
-make build EXTRA_KERNEL_ARGS='--extra-kernel-arg=mmc_core.polling=0 --extra-kernel-arg=cma=256M'
 ```
 
 ### Custom extensions
@@ -321,7 +316,6 @@ Browse available extensions: https://github.com/siderolabs/extensions
 ### Extra kernel args via build.sh
 
 ```bash
-# Default already includes: --kernel-arg mmc_core.polling=0
 ./scripts/build.sh --kernel-arg cma=256M --kernel-arg hugepages=64
 ```
 
