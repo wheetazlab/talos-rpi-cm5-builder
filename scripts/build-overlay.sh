@@ -117,6 +117,29 @@ perl -i -pe "s|^(\s*raspberrypi_kernel_sha256:\s*).*$|\$1${RPI_DTB_SHA256}|" Pkg
 perl -i -pe "s|^(\s*raspberrypi_kernel_sha512:\s*).*$|\$1${RPI_DTB_SHA512}|" Pkgfile
 perl -i -pe "s|https://github.com/raspberrypi/linux/archive/refs/tags/\{\{ \.raspberrypi_kernel_version \}\}\.tar\.gz|https://github.com/raspberrypi/linux/archive/\{\{ .raspberrypi_kernel_version \}\}\.tar\.gz|g" artifacts/dtb/raspberrypi/pkg.yaml
 
+# -- Inject local DTB patches (post-0006 ordering) --------------------------
+
+echo ""
+echo "==> Injecting local DTB patches from ${REPO_ROOT}/patches/dtb..."
+mkdir -p artifacts/dtb/raspberrypi/patches
+cp -v "${REPO_ROOT}/patches/dtb/0011-cm5-sdio1-drop-broken-cd.patch" \
+  artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch
+
+echo ""
+echo "==> Sanity: dry-run patch series against fresh raspberrypi/linux ${RPI_DTB_REF}..."
+tmp=$(mktemp -d)
+trap 'rm -rf "${tmp}"' EXIT
+curl -fsSL "https://github.com/raspberrypi/linux/archive/${RPI_DTB_REF}.tar.gz" \
+  | tar -xz -C "${tmp}" --strip-components=1
+(
+  cd "${tmp}"
+  for p in "${CHECKOUTS_DIR}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/"*.patch; do
+    echo "--> dry-run apply $(basename "$p")"
+    patch -p1 --dry-run < "$p"
+    patch -p1 < "$p"
+  done
+)
+
 # -- Build and push the overlay OCI ------------------------------------------
 
 echo ""

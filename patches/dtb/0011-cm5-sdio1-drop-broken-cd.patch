@@ -1,0 +1,54 @@
+From: Stephen Wheet <stephen@wheet>
+Date: Tue, 28 Apr 2026 00:00:00 -0700
+Subject: [PATCH] ARM: dts: bcm2712-rpi-cm5: Trust hardware card-detect on sdio1
+
+The BCM2712 SDHCI controller exposes a working SDHCI_CARD_PRESENT bit
+in its PRESENT_STATE register and raises SDHCI_INT_CARD_INSERT/REMOVE
+on physical state changes. On carriers that route the microSD slot's
+card-detect line to the controller's native CD pin (CM4IO, CM5IO,
+DeskPi Super6C, and the upstream RPi CM4/CM5 IO board reference
+designs), broken-cd is unnecessary.
+
+With broken-cd set, drivers/mmc/core/host.c sets MMC_CAP_NEEDS_POLL,
+which prevents mmc_rescan() from short-circuiting when the slot is
+empty. The kernel then issues CMD52 (SDIO probe) into the empty slot,
+which never completes, and sdhci_timeout_timer() emits
+
+  mmc0: Timeout waiting for hardware cmd interrupt.
+  ============ SDHCI REGISTER DUMP ===========
+
+every ~10 seconds for the lifetime of the system.
+
+Drop broken-cd. The controller's native card-detect handles both
+empty-slot quiet and hot-insert via SDHCI_INT_CARD_INSERT.
+
+CARRIER COMPATIBILITY: This change assumes the carrier wires microSD
+CD to the BCM2712 native CD pin. Verified on: CM4IO, CM5IO, DeskPi
+Super6C. Carriers that route CD to a GPIO instead must use
+cd-gpios = <...>; in addition to dropping broken-cd. Carriers that
+don't wire CD at all must keep broken-cd or set non-removable +
+cd-gpios with a tied-low GPIO; this patch will produce
+"card never detected" on such hardware.
+
+Note: this patch is generated against the post-0006 tree (after
+0006-0001-ARM-dts-bcm2712-Slow-down-eMMC-interface.patch has removed
+mmc-hs400-1_8v, mmc-hs400-enhanced-strobe, and supports-cqe = <1>
+from this same node). bldr applies overlay patches alphabetically,
+so 0011- lands after 0006- with no collision.
+---
+ arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
+--- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
++++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
+@@ -291,7 +291,6 @@
+ 	sd-uhs-ddr50;
+ 	sd-uhs-sdr104;
+ 	mmc-hs200-1_8v;
+-	broken-cd;
+ 	status = "okay";
+ };
+ 
+-- 
+2.43.0

@@ -23,7 +23,7 @@ OVERLAY="rpi_generic"
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)/_out"
 DISK=""
 CUSTOM_INSTALLER_BASE="${CUSTOM_INSTALLER_BASE:-ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb}"
-CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE:-ghcr.io/wheetazlab/sbc-raspberrypi:pr88}"
+CUSTOM_OVERLAY_IMAGE="${CUSTOM_OVERLAY_IMAGE:-ghcr.io/wheetazlab/sbc-raspberrypi:pr88-cd1}"
 # Extra extension images appended on top of defaults (--extension adds to this)
 EXTRA_EXTENSION_IMAGES=()
 # Extra kernel args accumulated via --kernel-arg KEY=VALUE

@@ -8,7 +8,7 @@ TALOS_VERSION        ?= v1.12.7
 ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.4
 CUSTOM_INSTALLER_BASE ?= ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb
-CUSTOM_OVERLAY_IMAGE  ?= ghcr.io/wheetazlab/sbc-raspberrypi:pr88
+CUSTOM_OVERLAY_IMAGE  ?= ghcr.io/wheetazlab/sbc-raspberrypi:pr88-cd1
 
 # --- Build config --------------------------------------------------------------
 ARCH        ?= arm64
