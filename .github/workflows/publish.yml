@@ -144,6 +144,12 @@ jobs:
           done
           echo "list=${RESOLVED# }" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve overlay digest
+        id: overlay
+        run: |
+          DIGEST=$(crane digest "${{ needs.resolve-version.outputs.overlay_image }}")
+          echo "image=${{ needs.resolve-version.outputs.overlay_image }}@${DIGEST}" >> "$GITHUB_OUTPUT"
+
       - name: Build kernel-arg flags
         id: kargs
         env:
@@ -178,7 +184,7 @@ jobs:
             "ghcr.io/siderolabs/imager:${TALOS_VERSION}"
             rpi_generic
             "--base-installer-image=${{ needs.resolve-version.outputs.installer_base }}"
-            "--overlay-image=${{ needs.resolve-version.outputs.overlay_image }}"
+            "--overlay-image=${{ steps.overlay.outputs.image }}"
             --overlay-name=rpi_generic
             ${EXT_ARGS}
             ${EXTRA_KERNEL_ARGS}
@@ -215,7 +221,7 @@ jobs:
             "ghcr.io/siderolabs/imager:${TALOS_VERSION}"
             installer
             "--base-installer-image=${{ needs.resolve-version.outputs.installer_base }}"
-            "--overlay-image=${{ needs.resolve-version.outputs.overlay_image }}"
+            "--overlay-image=${{ steps.overlay.outputs.image }}"
             --overlay-name=rpi_generic
             ${EXT_ARGS}
             ${EXTRA_KERNEL_ARGS}

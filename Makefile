@@ -67,6 +67,8 @@ all: build
 ## build: Build the custom Talos disk image for RPI CM5
 build: $(OUT_DIR)
 	@echo "==> Building Talos $(TALOS_VERSION) image for RPI CM5 (overlay: $(OVERLAY_IMAGE))"
+	$(DOCKER) pull "$(INSTALLER_BASE)"
+	$(DOCKER) pull "$(OVERLAY_IMAGE)"
 	$(DOCKER) run --rm $(TTY_FLAG) \
 		-v $(abspath $(OUT_DIR)):/out \
 		-v /dev:/dev \
@@ -87,6 +89,8 @@ build: $(OUT_DIR)
 ## installer: Build the Talos installer OCI image (used for talosctl upgrade)
 installer: $(OUT_DIR)
 	@echo "==> Building Talos installer image for RPI CM4/CM5"
+	$(DOCKER) pull "$(INSTALLER_BASE)"
+	$(DOCKER) pull "$(OVERLAY_IMAGE)"
 	$(DOCKER) run --rm $(TTY_FLAG) \
 		-v $(abspath $(OUT_DIR)):/out \
 		-v /dev:/dev \
