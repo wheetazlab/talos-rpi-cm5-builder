@@ -196,6 +196,15 @@ jobs:
           # Free disk space before the heavy kernel build
           rm -rf checkouts/linux-rpi-src
 
+      - name: Upload regenerated config-arm64 as artifact
+        # One-time use: download this artifact, update patches/pkgs/0001-Patched-for-Raspberry-Pi-5.patch
+        # with the new config-arm64 content, then remove this step and the regeneration step above.
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-arm64-${{ steps.ver.outputs.linux_ref }}
+          path: checkouts/pkgs/kernel/build/config-arm64
+          retention-days: 7
+
       - name: Copy vendored macb kernel patches into pkgs tree
         run: |
           # Patches vendored under patches/pkgs/kernel-rpi/ — fork-anchored
