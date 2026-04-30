@@ -178,6 +178,12 @@ jobs:
         run: |
           echo "tag=$(cd checkouts/pkgs && git describe --tag --always --dirty --match 'v[0-9]*')" >> "$GITHUB_OUTPUT"
 
+      - name: Publish kernel as kernel-rpi
+        run: |
+          crane copy \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }} \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }}
+
       # ── siderolabs/talos: installer-base with Pi-fork kernel ───────────────
 
       - name: Clone siderolabs/talos
@@ -194,7 +200,7 @@ jobs:
             REGISTRY=${{ env.REGISTRY }} \
             USERNAME=${{ env.REGISTRY_USERNAME }} \
             PUSH=true \
-            PKG_KERNEL=${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }} \
+            PKG_KERNEL=${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }} \
             INSTALLER_ARCH=arm64 \
             PLATFORM=linux/arm64 \
             installer-base
