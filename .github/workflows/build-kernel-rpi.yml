@@ -148,42 +148,53 @@ jobs:
           echo "Pkgfile head after patch:"
           grep -E '^\s*linux_(version|sha256):' checkouts/pkgs/Pkgfile
 
-      - name: Inject 16K page fix into kernel build (after hardening checker, before make)
+      - name: Regenerate config-arm64 for Pi fork kernel version
         run: |
           set -euo pipefail
-          # config-arm64 is from 6.18.21; Pi fork builds 6.18.24.
-          # Running 'make -j$(nproc)' on a version-mismatched .config triggers
-          # implicit syncconfig which resets the ARM64_PAGE_SIZE choice to the
-          # default (4K). The hardening checker runs BEFORE make, so we must
-          # NOT run olddefconfig before it (exposes new symbols → checker fails).
-          # Fix: inject into the make -j$(nproc) block — olddefconfig syncs
-          # new symbols AFTER the checker, then scripts/config forces 16K back,
-          # then make -j$(nproc) sees an up-to-date config and keeps 16K.
-          python3 - <<'EOF'
-          import sys
-          path = 'checkouts/pkgs/kernel/build/pkg.yaml'
-          with open(path) as f:
-              content = f.read()
-          old = '        make -j $(nproc)\n        make -j $(nproc) modules'
-          new = (
-              '        make olddefconfig\n'
-              '        ./scripts/config --disable ARM64_4K_PAGES --disable ARM64_64K_PAGES --enable ARM64_16K_PAGES\n'
-              '        make -j $(nproc)\n'
-              '        make -j $(nproc) modules'
-          )
-          if old not in content:
-              print(f'ERROR: expected string not found in {path}', file=sys.stderr)
-              print('Content around make -j:', file=sys.stderr)
-              for i, line in enumerate(content.splitlines()):
-                  if 'make -j' in line:
-                      print(f'  line {i}: {repr(line)}', file=sys.stderr)
-              sys.exit(1)
-          with open(path, 'w') as f:
-              f.write(content.replace(old, new, 1))
-          print('Injected olddefconfig + scripts/config into kernel/build/pkg.yaml build step')
-          EOF
-          echo "--- config-arm64 page size setting ---"
+          # config-arm64 in the patch was generated against 6.18.21 but the build
+          # targets 6.18.24. A version-mismatched .config causes implicit syncconfig
+          # during 'make -j$(nproc)', resetting ALL unresolved symbols (including
+          # ARM64_PAGE_SIZE) to their Kconfig defaults. Fix: download the exact
+          # kernel source, run olddefconfig to sync all new symbols to defaults,
+          # explicitly set 16K pages, write back as the authoritative config-arm64.
+          # The pkgs build then sees an exact-version-match config — no syncconfig
+          # reset, hardening checker sees all symbols explicitly set.
+          LINUX_REF="${{ steps.ver.outputs.linux_ref }}"
+
+          echo "Downloading raspberrypi/linux @ ${LINUX_REF}..."
+          curl -fL \
+            "https://github.com/raspberrypi/linux/archive/${LINUX_REF}.tar.gz" \
+            -o /tmp/linux-rpi.tar.gz
+
+          mkdir -p checkouts/linux-rpi-src
+          tar xf /tmp/linux-rpi.tar.gz -C checkouts/linux-rpi-src --strip-components=1
+          rm /tmp/linux-rpi.tar.gz
+
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc flex bison libssl-dev
+
+          # Sync all settings from 6.18.21 config to 6.18.24 kernel symbols
+          cp checkouts/pkgs/kernel/build/config-arm64 checkouts/linux-rpi-src/.config
+          make -C checkouts/linux-rpi-src ARCH=arm64 olddefconfig
+
+          # Force 16K pages explicitly (Kconfig default is 4K)
+          checkouts/linux-rpi-src/scripts/config \
+            --file checkouts/linux-rpi-src/.config \
+            --disable ARM64_4K_PAGES \
+            --disable ARM64_64K_PAGES \
+            --enable ARM64_16K_PAGES
+
+          # Re-sync to resolve any Kconfig dependencies from the page size change
+          make -C checkouts/linux-rpi-src ARCH=arm64 olddefconfig
+
+          # Write the authoritative versioned config back into the pkgs tree
+          cp checkouts/linux-rpi-src/.config checkouts/pkgs/kernel/build/config-arm64
+
+          echo "--- page size settings in updated config-arm64 ---"
           grep -E 'ARM64_(4K|16K|64K)_PAGES' checkouts/pkgs/kernel/build/config-arm64
+
+          # Free disk space before the heavy kernel build
+          rm -rf checkouts/linux-rpi-src
 
       - name: Copy vendored macb kernel patches into pkgs tree
         run: |
