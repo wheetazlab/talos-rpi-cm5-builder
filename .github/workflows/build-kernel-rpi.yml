@@ -1,0 +1,232 @@
+name: Build RPi-Kernel Installer Base (vendor fork)
+
+# Builds a custom installer-base OCI image using the Raspberry Pi vendor
+# kernel (raspberrypi/linux rpi-6.18.y) instead of mainline siderolabs/linux,
+# with the same three macb ethernet patches applied on top.
+#
+# Why: BCM2712 + RP1 boards (CM5) get thousands of platform fixes only carried
+# in the Pi vendor fork. The mainline-based build is the same patches but on
+# a kernel tree that doesn't know about RP1 quirks.
+#
+# Output: ghcr.io/wheetazlab/rpi-talos:<installer_tag>
+#   default tag: v1.12.7-k-rpi-macb
+#
+# After a successful run, flip CUSTOM_INSTALLER_BASE in the Makefile manually
+# when you're ready to cut over.
+#
+# Trigger:
+#   - workflow_dispatch  (manual)
+#   - push of a tag matching v*-rpi-kernel  (e.g. v1.12.7-rpi-kernel)
+
+on:
+  workflow_dispatch:
+    inputs:
+      talos_version:
+        description: 'Talos version (e.g. v1.12.7)'
+        required: false
+        default: 'v1.12.7'
+      pkg_version:
+        description: 'siderolabs/pkgs ref — branch, tag, or git-describe (e.g. v1.12.0-58-g86d6af1)'
+        required: false
+        default: 'v1.12.0-58-g86d6af1'
+      linux_ref:
+        description: 'raspberrypi/linux short SHA pinned by the vendored Pkgfile patch — workflow asserts the vendored patch matches'
+        required: false
+        default: 'f2f68e79f16f'
+      installer_tag:
+        description: 'Output image tag (e.g. v1.12.7-k-rpi-macb)'
+        required: false
+        default: 'v1.12.7-k-rpi-macb'
+      runner:
+        description: 'GitHub Actions runner (e.g. ubuntu-24.04-arm, mac-runner)'
+        required: false
+        default: 'ubuntu-24.04-arm'
+  push:
+    tags:
+      - 'v*-rpi-kernel'
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      REGISTRY_USERNAME: ${{ github.repository_owner }}
+
+    steps:
+      - name: Preflight disk cleanup (self-hosted safe)
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          if [[ -d /actions-runner/_diag ]]; then
+            sudo find /actions-runner/_diag -type f -name '*.log' -mtime +2 -print -delete || true
+          fi
+          if [[ -d /actions-runner/_work/_temp ]]; then
+            sudo rm -rf /actions-runner/_work/_temp/* || true
+          fi
+          echo "Disk after cleanup:"
+          df -h
+
+      - name: Checkout talos-rpi-builder
+        uses: actions/checkout@v4
+
+      - name: Set up Git identity (required for git am)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up crane
+        uses: imjasonh/setup-crane@v0.4
+        with:
+          version: v0.20.5
+
+      - name: Resolve versions
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Tag format: v1.12.7-rpi-kernel → extract v1.12.7
+            TAG="${{ github.ref_name }}"
+            TALOS_VERSION=$(echo "$TAG" | grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+')
+            PKG_VERSION="v1.12.0-58-g86d6af1"
+            LINUX_REF="f2f68e79f16f"
+            INSTALLER_TAG="${TALOS_VERSION}-k-rpi-macb"
+          else
+            TALOS_VERSION="${{ github.event.inputs.talos_version }}"
+            PKG_VERSION="${{ github.event.inputs.pkg_version }}"
+            LINUX_REF="${{ github.event.inputs.linux_ref }}"
+            INSTALLER_TAG="${{ github.event.inputs.installer_tag }}"
+          fi
+          echo "talos_version=${TALOS_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "linux_ref=${LINUX_REF}" >> "$GITHUB_OUTPUT"
+          echo "installer_tag=${INSTALLER_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved: Talos=${TALOS_VERSION}  pkgs=${PKG_VERSION}  linux-ref=${LINUX_REF}  tag=${INSTALLER_TAG}"
+
+      - name: Assert vendored Pi-fork patch matches linux_ref
+        run: |
+          set -euo pipefail
+          PATCH=patches/pkgs/0001-Patched-for-Raspberry-Pi-5.patch
+          REF="${{ steps.ver.outputs.linux_ref }}"
+          if ! grep -q "linux_version: ${REF}" "$PATCH"; then
+            echo "ERROR: vendored patch does not pin linux_version to ${REF}" >&2
+            grep -E '^\+.*linux_version:' "$PATCH" >&2 || true
+            exit 1
+          fi
+          echo "OK: vendored patch pins raspberrypi/linux ${REF}"
+
+      # ── siderolabs/pkgs: Pi-vendor kernel + macb patches ───────────────────
+
+      - name: Clone siderolabs/pkgs
+        run: |
+          git clone https://github.com/siderolabs/pkgs.git checkouts/pkgs
+          # Resolve git-describe refs (e.g. v1.12.0-58-g86d6af1 → 86d6af1)
+          PKG_REF="${{ steps.ver.outputs.pkg_version }}"
+          [[ "$PKG_REF" =~ -[0-9]+-g([0-9a-f]+)$ ]] && PKG_REF="${BASH_REMATCH[1]}"
+          git -C checkouts/pkgs -c advice.detachedHead=false checkout "$PKG_REF"
+
+      - name: Apply Pi-fork Pkgfile patch (swap kernel source to raspberrypi/linux)
+        run: |
+          set -euo pipefail
+          cp patches/pkgs/0001-Patched-for-Raspberry-Pi-5.patch checkouts/pkgs/
+          git -C checkouts/pkgs am 0001-Patched-for-Raspberry-Pi-5.patch
+          rm -f checkouts/pkgs/0001-Patched-for-Raspberry-Pi-5.patch
+          echo "Pkgfile head after patch:"
+          grep -E '^\s*linux_(version|sha256):' checkouts/pkgs/Pkgfile
+
+      - name: Copy vendored macb kernel patches into pkgs tree
+        run: |
+          # Patches vendored under patches/pkgs/kernel-rpi/ — fork-anchored
+          # versions from lukaszraczylo/talos-builder (same series as netdev
+          # RFC, but patch 3 is anchored on raspberrypi/linux rpi-6.18.y which
+          # has an extra `bool tx_pending` field on `struct macb_queue` not
+          # present in mainline). Required when kernel source is the Pi fork.
+          set -euo pipefail
+          install -m 0644 \
+            patches/pkgs/kernel-rpi/0001-net-macb-flush-PCIe-posted-write-after-TSTART-doorbe.patch \
+            patches/pkgs/kernel-rpi/0002-net-macb-re-check-ISR-after-IER-re-enable-in-macb_tx.patch \
+            patches/pkgs/kernel-rpi/0003-net-macb-add-TX-stall-watchdog-to-recover-from-lost-.patch \
+            checkouts/pkgs/kernel/build/patches/
+          ls -1 checkouts/pkgs/kernel/build/patches/000*-net-macb-*.patch
+
+      - name: Build kernel (siderolabs/pkgs, Pi vendor source)
+        run: |
+          cd checkouts/pkgs
+          make \
+            REGISTRY=${{ env.REGISTRY }} \
+            USERNAME=${{ env.REGISTRY_USERNAME }} \
+            PUSH=true \
+            PLATFORM=linux/arm64 \
+            kernel
+
+      - name: Get pkgs tag
+        id: pkgs
+        run: |
+          echo "tag=$(cd checkouts/pkgs && git describe --tag --always --dirty --match 'v[0-9]*')" >> "$GITHUB_OUTPUT"
+
+      # ── siderolabs/talos: installer-base with Pi-fork kernel ───────────────
+
+      - name: Clone siderolabs/talos
+        run: |
+          git clone -c advice.detachedHead=false \
+            --branch "${{ steps.ver.outputs.talos_version }}" \
+            https://github.com/siderolabs/talos.git checkouts/talos
+
+      - name: Build and push installer-base
+        run: |
+          cd checkouts/talos
+          make \
+            TAG=${{ steps.ver.outputs.talos_version }} \
+            REGISTRY=${{ env.REGISTRY }} \
+            USERNAME=${{ env.REGISTRY_USERNAME }} \
+            PUSH=true \
+            PKG_KERNEL=${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }} \
+            INSTALLER_ARCH=arm64 \
+            PLATFORM=linux/arm64 \
+            installer-base
+
+      # ── Publish under stable rpi-talos name ───────────────────────────────
+
+      - name: Publish as rpi-talos
+        run: |
+          crane copy \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/installer-base:${{ steps.ver.outputs.talos_version }} \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/rpi-talos:${{ steps.ver.outputs.installer_tag }}
+
+      - name: Postflight BuildKit cleanup
+        if: always()
+        run: |
+          set +e
+          docker ps -a --format '{{.Names}}' | grep '^buildx_buildkit_' | xargs -r docker rm -f
+          docker volume ls --format '{{.Name}}' | grep '^buildx_buildkit_.*_state$' | xargs -r docker volume rm
+          docker builder prune -af || true
+          docker system prune -af --volumes || true
+          df -h
+
+      - name: Summary
+        run: |
+          echo "## RPi-Kernel Installer Base Built" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Talos | \`${{ steps.ver.outputs.talos_version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| pkgs | \`${{ steps.ver.outputs.pkg_version }}\` @ \`${{ steps.pkgs.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| kernel source | \`raspberrypi/linux\` rpi-6.18.y @ \`${{ steps.ver.outputs.linux_ref }}\` (vendored Pkgfile patch) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| macb patch source | \`lukaszraczylo/talos-builder/patches/linux\` (fork-anchored, vendored) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/rpi-talos:${{ steps.ver.outputs.installer_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "To use: set \`CUSTOM_INSTALLER_BASE=ghcr.io/wheetazlab/rpi-talos:${{ steps.ver.outputs.installer_tag }}\` in the Makefile and rebuild." >> "$GITHUB_STEP_SUMMARY"
