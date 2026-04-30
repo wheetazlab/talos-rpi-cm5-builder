@@ -148,28 +148,39 @@ jobs:
           echo "Pkgfile head after patch:"
           grep -E '^\s*linux_(version|sha256):' checkouts/pkgs/Pkgfile
 
-      - name: Inject make olddefconfig into kernel build (preserve 16K pages across version mismatch)
+      - name: Inject 16K page fix into kernel build (after hardening checker, before make)
         run: |
           set -euo pipefail
-          # config-arm64 in the patch is from 6.18.21; Pi fork builds 6.18.24.
-          # When make -j$(nproc) runs on a fresh tree with a mismatched .config,
-          # syncconfig resets the ARM64_PAGE_SIZE choice to the default (4K).
-          # Adding 'make olddefconfig' after 'cp config .config' syncs new
-          # Kconfig symbols to their defaults while keeping our explicit y/n
-          # choices — so CONFIG_ARM64_16K_PAGES=y survives.
+          # config-arm64 is from 6.18.21; Pi fork builds 6.18.24.
+          # Running 'make -j$(nproc)' on a version-mismatched .config triggers
+          # implicit syncconfig which resets the ARM64_PAGE_SIZE choice to the
+          # default (4K). The hardening checker runs BEFORE make, so we must
+          # NOT run olddefconfig before it (exposes new symbols → checker fails).
+          # Fix: inject into the make -j$(nproc) block — olddefconfig syncs
+          # new symbols AFTER the checker, then scripts/config forces 16K back,
+          # then make -j$(nproc) sees an up-to-date config and keeps 16K.
           python3 - <<'EOF'
           import sys
           path = 'checkouts/pkgs/kernel/build/pkg.yaml'
           with open(path) as f:
               content = f.read()
-          old = '        cp -v /pkg/certs/* certs/'
-          new = '        cp -v /pkg/certs/* certs/\n        make olddefconfig'
+          old = '        make -j $(nproc)\n        make -j $(nproc) modules'
+          new = (
+              '        make olddefconfig\n'
+              '        ./scripts/config --disable ARM64_4K_PAGES --disable ARM64_64K_PAGES --enable ARM64_16K_PAGES\n'
+              '        make -j $(nproc)\n'
+              '        make -j $(nproc) modules'
+          )
           if old not in content:
               print(f'ERROR: expected string not found in {path}', file=sys.stderr)
+              print('Content around make -j:', file=sys.stderr)
+              for i, line in enumerate(content.splitlines()):
+                  if 'make -j' in line:
+                      print(f'  line {i}: {repr(line)}', file=sys.stderr)
               sys.exit(1)
           with open(path, 'w') as f:
               f.write(content.replace(old, new, 1))
-          print('Injected make olddefconfig into kernel/build/pkg.yaml')
+          print('Injected olddefconfig + scripts/config into kernel/build/pkg.yaml build step')
           EOF
           echo "--- config-arm64 page size setting ---"
           grep -E 'ARM64_(4K|16K|64K)_PAGES' checkouts/pkgs/kernel/build/config-arm64
