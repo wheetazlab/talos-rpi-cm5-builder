@@ -7,7 +7,9 @@
 TALOS_VERSION        ?= v1.12.7
 ISCSI_TOOLS_VERSION  ?= v0.2.0
 UTIL_LINUX_VERSION   ?= 2.41.4
-CUSTOM_INSTALLER_BASE ?= ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb
+# CUSTOM_INSTALLER_BASE: defined in .github/workflows/publish.yml as workflow_dispatch input.
+#   Default there = ghcr.io/wheetazlab/rpi-talos:<TALOS_VERSION>-k-rpi-macb (Pi-vendor + 16K).
+#   Override per-run via Actions UI to use mainline (-k-macb) instead.
 CUSTOM_OVERLAY_IMAGE  ?= ghcr.io/wheetazlab/sbc-raspberrypi:pr88-cd1
 
 # --- Build config --------------------------------------------------------------

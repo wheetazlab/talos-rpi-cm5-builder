@@ -10,6 +10,10 @@ on:
         description: 'Base Talos version (e.g. v1.12.7)'
         required: false
         default: 'v1.12.7'
+      installer_base:
+        description: 'Custom installer-base image. Default = mainline kernel + 4K (-k-macb). Use publish-rpi.yml for Pi-vendor + 16K.'
+        required: false
+        default: 'ghcr.io/wheetazlab/rpi-talos:v1.12.7-k-macb'
       extra_kernel_args:
         description: 'Extra kernel args — space-separated key=value pairs (e.g. cma=256M hugepages=64)'
         required: false
@@ -77,7 +81,12 @@ jobs:
           ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk '{print $NF}')
           UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk '{print $NF}')
           LINUX=$(grep '^LINUX_KERNEL_VERSION' Makefile | awk '{print $NF}')
-          INSTALLER_BASE=$(grep '^CUSTOM_INSTALLER_BASE' Makefile | awk '{print $NF}')
+          # installer_base: workflow input wins; tag-push falls back to mainline default
+          if [[ -n "${{ github.event.inputs.installer_base }}" ]]; then
+            INSTALLER_BASE="${{ github.event.inputs.installer_base }}"
+          else
+            INSTALLER_BASE="ghcr.io/wheetazlab/rpi-talos:${VERSION}-k-macb"
+          fi
           OVERLAY_IMAGE=$(grep '^CUSTOM_OVERLAY_IMAGE' Makefile | awk '{print $NF}')
           echo "overlay_image=${OVERLAY_IMAGE}" >> "$GITHUB_OUTPUT"
           echo "linux_kernel_version=${LINUX}" >> "$GITHUB_OUTPUT"
