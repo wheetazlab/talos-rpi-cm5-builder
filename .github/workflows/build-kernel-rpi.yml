@@ -26,9 +26,9 @@ on:
         required: false
         default: 'v1.12.7'
       pkg_version:
-        description: 'siderolabs/pkgs ref — branch, tag, or git-describe (e.g. v1.12.0-58-g86d6af1)'
+        description: 'siderolabs/pkgs ref — must match the base of the vendored Pkgfile patch (Lukasz patch is anchored on tag v1.12.0)'
         required: false
-        default: 'v1.12.0-58-g86d6af1'
+        default: 'v1.12.0'
       linux_ref:
         description: 'raspberrypi/linux short SHA pinned by the vendored Pkgfile patch — workflow asserts the vendored patch matches'
         required: false
@@ -102,7 +102,7 @@ jobs:
             # Tag format: v1.12.7-rpi-kernel → extract v1.12.7
             TAG="${{ github.ref_name }}"
             TALOS_VERSION=$(echo "$TAG" | grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+')
-            PKG_VERSION="v1.12.0-58-g86d6af1"
+            PKG_VERSION="v1.12.0"
             LINUX_REF="f2f68e79f16f"
             INSTALLER_TAG="${TALOS_VERSION}-k-rpi-macb"
           else
