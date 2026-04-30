@@ -190,7 +190,7 @@ jobs:
         run: |
           cd checkouts/talos
           make \
-            TAG=${{ steps.ver.outputs.talos_version }} \
+            TAG=${{ steps.ver.outputs.talos_version }}-rpi \
             REGISTRY=${{ env.REGISTRY }} \
             USERNAME=${{ env.REGISTRY_USERNAME }} \
             PUSH=true \
@@ -204,7 +204,7 @@ jobs:
       - name: Publish as rpi-talos
         run: |
           crane copy \
-            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/installer-base:${{ steps.ver.outputs.talos_version }} \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/installer-base:${{ steps.ver.outputs.talos_version }}-rpi \
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/rpi-talos:${{ steps.ver.outputs.installer_tag }}
 
       - name: Postflight BuildKit cleanup
