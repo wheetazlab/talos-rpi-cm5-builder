@@ -228,16 +228,29 @@ jobs:
           ls -lh "$VMLINUZ"
           echo ""
 
-          # Extract embedded config via IKCFG_ST magic (requires CONFIG_IKCONFIG=y)
-          OFFSET=$(grep -aob 'IKCFG_ST' "$VMLINUZ" | head -1 | cut -d: -f1)
+          # Extract embedded config via IKCFG_ST magic (requires CONFIG_IKCONFIG=y).
+          # || true prevents set -e from killing the script when grep finds no match.
+          OFFSET=$(grep -aob 'IKCFG_ST' "$VMLINUZ" 2>/dev/null | head -1 | cut -d: -f1 || true)
+
           if [ -z "$OFFSET" ]; then
-            echo "ERROR: IKCFG_ST magic not found — CONFIG_IKCONFIG not set in kernel?"
-            exit 1
+            echo "IKCFG_ST not found directly (vmlinuz is compressed). Trying extract-ikconfig..."
+            # Use the official kernel script — handles gzip/bzip2/xz/lz4/zstd compressed vmlinuz
+            curl -fsSL \
+              "https://raw.githubusercontent.com/raspberrypi/linux/${{ steps.ver.outputs.linux_ref }}/scripts/extract-ikconfig" \
+              -o /tmp/extract-ikconfig
+            chmod +x /tmp/extract-ikconfig
+            if /tmp/extract-ikconfig "$VMLINUZ" > /tmp/kernel-embedded-config.txt; then
+              echo "Extracted $(wc -l < /tmp/kernel-embedded-config.txt) config lines via extract-ikconfig"
+            else
+              echo "ERROR: extract-ikconfig failed — CONFIG_IKCONFIG may not be compiled in"
+              exit 1
+            fi
+          else
+            START=$((OFFSET + 8))
+            echo "Extracting embedded config at byte offset $START..."
+            dd if="$VMLINUZ" bs=1 skip=$START 2>/dev/null | zcat > /tmp/kernel-embedded-config.txt
+            echo "Extracted $(wc -l < /tmp/kernel-embedded-config.txt) config lines"
           fi
-          START=$((OFFSET + 8))
-          echo "Extracting embedded config at byte offset $START..."
-          dd if="$VMLINUZ" bs=1 skip=$START 2>/dev/null | zcat > /tmp/kernel-embedded-config.txt
-          echo "Extracted $(wc -l < /tmp/kernel-embedded-config.txt) config lines"
           echo ""
 
           echo "=== PAGE SIZE settings in BUILT KERNEL ==="
