@@ -1,13 +1,13 @@
-From 8676ec93b9255090cbc2215a79379219d7466bf8 Mon Sep 17 00:00:00 2001
+From 20d93d3480d1a37e505ce032af6732560eca3938 Mon Sep 17 00:00:00 2001
 From: local-build <local@build>
 Date: Wed, 8 Apr 2026 12:24:40 -0500
 Subject: [PATCH] Patched for Raspberry Pi 5
 
 ---
  Pkgfile                   |   8 +-
- kernel/build/config-arm64 | 646 +++++++++++++++++++++++---------------
+ kernel/build/config-arm64 | 652 ++++++++++++++++++++++++--------------
  kernel/prepare/pkg.yaml   |   6 +-
- 3 files changed, 407 insertions(+), 253 deletions(-)
+ 3 files changed, 413 insertions(+), 253 deletions(-)
 
 diff --git a/Pkgfile b/Pkgfile
 index 8799e13..fc350c8 100644
@@ -29,7 +29,7 @@ index 8799e13..fc350c8 100644
    # renovate: datasource=git-tags extractVersion=^libaio-(?<version>.*)$ depName=https://pagure.io/libaio.git
    libaio_version: 0.3.113
 diff --git a/kernel/build/config-arm64 b/kernel/build/config-arm64
-index 65b3647..0945886 100644
+index 65b3647..69c7894 100644
 --- a/kernel/build/config-arm64
 +++ b/kernel/build/config-arm64
 @@ -1,28 +1,26 @@
@@ -2245,6 +2245,16 @@ index 65b3647..0945886 100644
  CONFIG_KPROBE_EVENTS=y
  # CONFIG_KPROBE_EVENTS_ON_NOTRACE is not set
  CONFIG_UPROBE_EVENTS=y
+@@ -10577,3 +10731,9 @@ CONFIG_ARCH_USE_MEMTEST=y
+ # end of Kernel hacking
+ 
+ CONFIG_IO_URING_ZCRX=y
++CONFIG_RODATA_FULL_DEFAULT_ENABLED=y
++CONFIG_GCC_PLUGINS=y
++CONFIG_GCC_PLUGIN_LATENT_ENTROPY=y
++CONFIG_KSTACK_ERASE=y
++# CONFIG_KSTACK_ERASE_METRICS is not set
++# CONFIG_KSTACK_ERASE_RUNTIME_DISABLE is not set
 diff --git a/kernel/prepare/pkg.yaml b/kernel/prepare/pkg.yaml
 index 6408110..ecc2cd4 100644
 --- a/kernel/prepare/pkg.yaml
