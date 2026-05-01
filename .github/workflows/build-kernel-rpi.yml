@@ -163,30 +163,6 @@ jobs:
             checkouts/pkgs/kernel/build/patches/
           ls -1 checkouts/pkgs/kernel/build/patches/000*-net-macb-*.patch
 
-      - name: Inject make olddefconfig into pkgs kernel build
-        run: |
-          # The config-arm64 in the patch was generated with GCC 13 (Ubuntu),
-          # but the siderolabs toolchain uses GCC 15.2. When make starts,
-          # auto.conf.cmd detects the CC_VERSION_TEXT mismatch and triggers
-          # syncconfig, which resets the ARM64_PAGE_SIZE choice back to the
-          # default (4K). Running olddefconfig first syncs the config against
-          # the actual toolchain compiler, preserving our 16K choice, so
-          # the subsequent make -j$(nproc) has nothing left to re-sync.
-          python3 - <<'EOF'
-          import sys
-          path = 'checkouts/pkgs/kernel/build/pkg.yaml'
-          text = open(path).read()
-          old = '        cp -v /pkg/certs/* certs/'
-          new = '        cp -v /pkg/certs/* certs/\n        make olddefconfig'
-          if old not in text:
-              print(f"ERROR: injection point not found in {path}", file=sys.stderr)
-              sys.exit(1)
-          text = text.replace(old, new, 1)
-          open(path, 'w').write(text)
-          print("Injected 'make olddefconfig' after certs copy in kernel/build/pkg.yaml")
-          EOF
-          grep -n 'olddefconfig\|cp -v /pkg/certs' checkouts/pkgs/kernel/build/pkg.yaml
-
       - name: Build kernel (siderolabs/pkgs, Pi vendor source)
         run: |
           cd checkouts/pkgs
