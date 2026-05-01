@@ -277,44 +277,49 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }} \
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }}
 
-      # ── Build patched imager with RPi kernel ───────────────────────────────
-      # The Talos imager (siderolabs/imager) bundles the kernel artifact at
-      # /usr/install/arm64/vmlinuz INSIDE the container. outInstaller() reads
-      # this path to create the artifacts layer of the final installer OCI.
-      # --base-installer-image only provides the installer binary (layer 1).
-      # To get our RPi 16K-pages kernel into the installer we must replace the
-      # kernel inside the imager image itself.
-      - name: Build and push patched imager (RPi 16K kernel)
-        run: |
-          set -euo pipefail
-          KERNEL_REF="${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }}"
-          IMAGER_OUT="${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/imager-rpi:${{ steps.ver.outputs.talos_version }}-rpi"
-
-          # Extract RPi kernel binary from kernel-rpi OCI into a Docker build context
-          mkdir -p /tmp/patched-imager-ctx
-          crane export --platform linux/arm64 "${KERNEL_REF}" - \
-            | tar -xOf - boot/vmlinuz > /tmp/patched-imager-ctx/vmlinuz
-          ls -lh /tmp/patched-imager-ctx/vmlinuz
-
-          # Dockerfile: inherit stock siderolabs/imager, replace kernel only
-          printf 'FROM ghcr.io/siderolabs/imager:%s\nCOPY vmlinuz /usr/install/arm64/vmlinuz\n' \
-            "${{ steps.ver.outputs.talos_version }}" > /tmp/patched-imager-ctx/Dockerfile
-          cat /tmp/patched-imager-ctx/Dockerfile
-
-          docker buildx build \
-            --platform linux/arm64 \
-            --tag "${IMAGER_OUT}" \
-            --push \
-            /tmp/patched-imager-ctx
-          echo "Pushed: ${IMAGER_OUT}"
-
-      # ── siderolabs/talos: installer-base with Pi-fork kernel ───────────────
+      # ── siderolabs/talos: imager + installer-base with RPi kernel ────────────
+      # The Talos imager bundles kernel + initramfs at build time. outInstaller()
+      # uses /usr/install/arm64/vmlinuz (kernel) AND /usr/install/arm64/initramfs.xz
+      # (both from inside the running imager container) to create the UKI artifacts
+      # layer. --base-installer-image only provides the installer binary (layer 1).
+      #
+      # Replacing only vmlinuz in the stock imager is NOT sufficient: the stock
+      # initramfs contains modules compiled for the mainline 4K kernel. Those
+      # modules will not load on a 16K-pages kernel (page-size mismatch in module
+      # magic). We must build the full imager from siderolabs/talos source so that
+      # both the kernel and the initramfs come from our RPi vendor kernel OCI.
+      #
+      # We also apply patches/talos/0001-modules-arm64-rpi.patch which replaces
+      # the x86/server-oriented modules-arm64.txt with RPi-relevant modules
+      # (BCM2835, USB networking, media, sound) before the initramfs is built.
 
       - name: Clone siderolabs/talos
         run: |
           git clone -c advice.detachedHead=false \
             --branch "${{ steps.ver.outputs.talos_version }}" \
             https://github.com/siderolabs/talos.git checkouts/talos
+
+      - name: Apply RPi modules-arm64.txt patch to talos
+        run: |
+          set -euo pipefail
+          cp patches/talos/0001-modules-arm64-rpi.patch checkouts/talos/
+          git -C checkouts/talos am 0001-modules-arm64-rpi.patch
+          rm -f checkouts/talos/0001-modules-arm64-rpi.patch
+          echo "modules-arm64.txt head after patch:"
+          head -5 checkouts/talos/hack/modules-arm64.txt
+
+      - name: Build and push imager (RPi 16K kernel + matching initramfs)
+        run: |
+          cd checkouts/talos
+          make \
+            TAG=${{ steps.ver.outputs.talos_version }}-rpi \
+            REGISTRY=${{ env.REGISTRY }} \
+            USERNAME=${{ env.REGISTRY_USERNAME }} \
+            PUSH=true \
+            PKG_KERNEL=${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }} \
+            INSTALLER_ARCH=arm64 \
+            PLATFORM=linux/arm64 \
+            imager
 
       - name: Build and push installer-base
         run: |
@@ -328,6 +333,14 @@ jobs:
             INSTALLER_ARCH=arm64 \
             PLATFORM=linux/arm64 \
             installer-base
+
+      # The imager target publishes as imager:<tag>-rpi; rename to imager-rpi:<tag>-rpi
+      # so publish-rpi.yml can reference a stable name independent of the talos tag.
+      - name: Tag imager as imager-rpi
+        run: |
+          crane copy \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/imager:${{ steps.ver.outputs.talos_version }}-rpi \
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/imager-rpi:${{ steps.ver.outputs.talos_version }}-rpi
 
       # ── Publish under stable rpi-talos name ───────────────────────────────
 
