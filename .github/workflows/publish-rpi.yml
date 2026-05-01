@@ -213,7 +213,7 @@ jobs:
             -v /dev:/dev
             --privileged
             -v talos-image-out:/out
-            "ghcr.io/siderolabs/imager:${TALOS_VERSION}"
+            "ghcr.io/${REGISTRY_USERNAME}/imager-rpi:${TALOS_VERSION}-rpi"
             rpi_generic
             "--base-installer-image=${{ needs.resolve-version.outputs.installer_base }}"
             "--overlay-image=${{ steps.overlay.outputs.image }}"
@@ -250,7 +250,7 @@ jobs:
             -v /dev:/dev
             --privileged
             -v talos-installer-out:/out
-            "ghcr.io/siderolabs/imager:${TALOS_VERSION}"
+            "ghcr.io/${REGISTRY_USERNAME}/imager-rpi:${TALOS_VERSION}-rpi"
             installer
             "--base-installer-image=${{ needs.resolve-version.outputs.installer_base }}"
             "--overlay-image=${{ steps.overlay.outputs.image }}"
@@ -355,7 +355,7 @@ jobs:
           | Component | Version / Image |
           |-----------|------------------|
           | Talos | `${{ env.TALOS_VERSION }}` |
-          | Imager | `ghcr.io/siderolabs/imager:${{ env.TALOS_VERSION }}` |
+          | Imager | `ghcr.io/${{ env.REGISTRY_USERNAME }}/imager-rpi:${{ env.TALOS_VERSION }}-rpi` (patched — RPi 16K kernel) |
           | Installer base | `${{ env.INSTALLER_BASE }}` (RPi vendor kernel — built by `build-kernel-rpi.yml`) |
           | Kernel | Linux ${{ env.LINUX_KERNEL_VERSION }} + 3× macb PCIe patches (fork-anchored) |
           | SBC overlay | `${{ env.OVERLAY_IMAGE }}` (rpi_generic — PR #88 + CM5 sdio1 broken-cd drop) |

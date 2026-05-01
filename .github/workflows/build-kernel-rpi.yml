@@ -277,6 +277,37 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }} \
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }}
 
+      # ── Build patched imager with RPi kernel ───────────────────────────────
+      # The Talos imager (siderolabs/imager) bundles the kernel artifact at
+      # /usr/install/arm64/vmlinuz INSIDE the container. outInstaller() reads
+      # this path to create the artifacts layer of the final installer OCI.
+      # --base-installer-image only provides the installer binary (layer 1).
+      # To get our RPi 16K-pages kernel into the installer we must replace the
+      # kernel inside the imager image itself.
+      - name: Build and push patched imager (RPi 16K kernel)
+        run: |
+          set -euo pipefail
+          KERNEL_REF="${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }}"
+          IMAGER_OUT="${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/imager-rpi:${{ steps.ver.outputs.talos_version }}-rpi"
+
+          # Extract RPi kernel binary from kernel-rpi OCI into a Docker build context
+          mkdir -p /tmp/patched-imager-ctx
+          crane export --platform linux/arm64 "${KERNEL_REF}" - \
+            | tar -xOf - boot/vmlinuz > /tmp/patched-imager-ctx/vmlinuz
+          ls -lh /tmp/patched-imager-ctx/vmlinuz
+
+          # Dockerfile: inherit stock siderolabs/imager, replace kernel only
+          printf 'FROM ghcr.io/siderolabs/imager:%s\nCOPY vmlinuz /usr/install/arm64/vmlinuz\n' \
+            "${{ steps.ver.outputs.talos_version }}" > /tmp/patched-imager-ctx/Dockerfile
+          cat /tmp/patched-imager-ctx/Dockerfile
+
+          docker buildx build \
+            --platform linux/arm64 \
+            --tag "${IMAGER_OUT}" \
+            --push \
+            /tmp/patched-imager-ctx
+          echo "Pushed: ${IMAGER_OUT}"
+
       # ── siderolabs/talos: installer-base with Pi-fork kernel ───────────────
 
       - name: Clone siderolabs/talos
@@ -326,6 +357,7 @@ jobs:
           echo "| pkgs | \`${{ steps.ver.outputs.pkg_version }}\` @ \`${{ steps.pkgs.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| kernel source | \`raspberrypi/linux\` rpi-6.18.y @ \`${{ steps.ver.outputs.linux_ref }}\` (vendored Pkgfile patch) |" >> "$GITHUB_STEP_SUMMARY"
           echo "| macb patch source | \`lukaszraczylo/talos-builder/patches/linux\` (fork-anchored, vendored) |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/rpi-talos:${{ steps.ver.outputs.installer_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Installer base | \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/rpi-talos:${{ steps.ver.outputs.installer_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Patched imager | \`${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/imager-rpi:${{ steps.ver.outputs.talos_version }}-rpi\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "To use: set \`CUSTOM_INSTALLER_BASE=ghcr.io/wheetazlab/rpi-talos:${{ steps.ver.outputs.installer_tag }}\` in the Makefile and rebuild." >> "$GITHUB_STEP_SUMMARY"
+          echo "publish-rpi.yml will use the patched imager automatically (kernel comes from inside the imager, not installer-base)." >> "$GITHUB_STEP_SUMMARY"
