@@ -278,20 +278,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }}
 
       # ── siderolabs/talos: imager + installer-base with RPi kernel ────────────
-      # The Talos imager bundles kernel + initramfs at build time. outInstaller()
-      # uses /usr/install/arm64/vmlinuz (kernel) AND /usr/install/arm64/initramfs.xz
-      # (both from inside the running imager container) to create the UKI artifacts
-      # layer. --base-installer-image only provides the installer binary (layer 1).
-      #
-      # Replacing only vmlinuz in the stock imager is NOT sufficient: the stock
-      # initramfs contains modules compiled for the mainline 4K kernel. Those
-      # modules will not load on a 16K-pages kernel (page-size mismatch in module
-      # magic). We must build the full imager from siderolabs/talos source so that
-      # both the kernel and the initramfs come from our RPi vendor kernel OCI.
-      #
-      # We also apply patches/talos/0001-modules-arm64-rpi.patch which replaces
-      # the x86/server-oriented modules-arm64.txt with RPi-relevant modules
-      # (BCM2835, USB networking, media, sound) before the initramfs is built.
+      # Build full imager from source: kernel + initramfs must both come from our
+      # RPi kernel OCI (16K pages). Stock initramfs has 4K modules — they won't
+      # load on a 16K kernel. modules-arm64.txt patch swaps in RPi-relevant modules.
 
       - name: Clone siderolabs/talos
         run: |
