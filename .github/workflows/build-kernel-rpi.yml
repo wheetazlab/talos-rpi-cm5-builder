@@ -148,6 +148,31 @@ jobs:
           echo "Pkgfile head after patch:"
           grep -E '^\s*linux_(version|sha256):' checkouts/pkgs/Pkgfile
 
+      - name: Verify config-arm64 page size and compiler settings
+        run: |
+          set -euo pipefail
+          CONFIG=checkouts/pkgs/kernel/build/config-arm64
+          echo "=== ARM64 page size settings ==="
+          grep -E 'ARM64_(4K|16K|64K)_PAGES' "$CONFIG"
+          echo ""
+          echo "=== Compiler metadata ==="
+          grep -E 'CC_VERSION_TEXT|GCC_VERSION|AS_VERSION|LD_VERSION' "$CONFIG"
+          echo ""
+          echo "=== Page shift ==="
+          grep -E 'PAGE_SHIFT|PAGE_SIZE' "$CONFIG" | head -5
+          echo ""
+          # Hard fail if 4K is set
+          if grep -q '^CONFIG_ARM64_4K_PAGES=y' "$CONFIG"; then
+            echo "FATAL: CONFIG_ARM64_4K_PAGES=y found in config-arm64 — patch is wrong!" >&2
+            exit 1
+          fi
+          # Hard fail if 16K is NOT set
+          if ! grep -q '^CONFIG_ARM64_16K_PAGES=y' "$CONFIG"; then
+            echo "FATAL: CONFIG_ARM64_16K_PAGES=y NOT found in config-arm64 — patch is wrong!" >&2
+            exit 1
+          fi
+          echo "PASS: config-arm64 has CONFIG_ARM64_16K_PAGES=y and no 4K pages"
+
       - name: Copy vendored macb kernel patches into pkgs tree
         run: |
           # Patches vendored under patches/pkgs/kernel-rpi/ — fork-anchored
@@ -177,6 +202,61 @@ jobs:
         id: pkgs
         run: |
           echo "tag=$(cd checkouts/pkgs && git describe --tag --always --dirty --match 'v[0-9]*')" >> "$GITHUB_OUTPUT"
+
+      - name: Verify built kernel has 16K pages (IKCONFIG extract)
+        run: |
+          set -euo pipefail
+          KERNEL_IMAGE="${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }}"
+          echo "Inspecting kernel image: $KERNEL_IMAGE"
+          echo ""
+
+          # Export the image filesystem and locate the kernel binary
+          mkdir -p /tmp/kernel-inspect
+          echo "=== Image filesystem (boot/ and lib/modules/ entries) ==="
+          crane export --platform linux/arm64 "$KERNEL_IMAGE" - \
+            | tar -xvf - -C /tmp/kernel-inspect 2>&1 \
+            | grep -E '^(boot/|lib/modules/)' || true
+          echo ""
+
+          VMLINUZ=$(find /tmp/kernel-inspect/boot -name 'vmlinuz*' -o -name 'Image' 2>/dev/null | head -1)
+          if [ -z "$VMLINUZ" ]; then
+            echo "ERROR: kernel binary not found in /boot. Listing /tmp/kernel-inspect:"
+            find /tmp/kernel-inspect -maxdepth 3 | sort
+            exit 1
+          fi
+          echo "Found kernel binary: $VMLINUZ"
+          ls -lh "$VMLINUZ"
+          echo ""
+
+          # Extract embedded config via IKCFG_ST magic (requires CONFIG_IKCONFIG=y)
+          OFFSET=$(grep -aob 'IKCFG_ST' "$VMLINUZ" | head -1 | cut -d: -f1)
+          if [ -z "$OFFSET" ]; then
+            echo "ERROR: IKCFG_ST magic not found — CONFIG_IKCONFIG not set in kernel?"
+            exit 1
+          fi
+          START=$((OFFSET + 8))
+          echo "Extracting embedded config at byte offset $START..."
+          dd if="$VMLINUZ" bs=1 skip=$START 2>/dev/null | zcat > /tmp/kernel-embedded-config.txt
+          echo "Extracted $(wc -l < /tmp/kernel-embedded-config.txt) config lines"
+          echo ""
+
+          echo "=== PAGE SIZE settings in BUILT KERNEL ==="
+          grep -E 'ARM64_(4K|16K|64K)_PAGES|PAGE_SHIFT|PAGE_SIZE' /tmp/kernel-embedded-config.txt
+          echo ""
+          echo "=== COMPILER metadata in BUILT KERNEL ==="
+          grep -E 'CC_VERSION_TEXT|GCC_VERSION|AS_VERSION|LD_VERSION' /tmp/kernel-embedded-config.txt
+          echo ""
+
+          # Hard fail if 4K survived into the built kernel
+          if grep -q '^CONFIG_ARM64_4K_PAGES=y' /tmp/kernel-embedded-config.txt; then
+            echo "FATAL: Built kernel has CONFIG_ARM64_4K_PAGES=y — 16K pages did NOT survive the build!" >&2
+            exit 1
+          fi
+          if ! grep -q '^CONFIG_ARM64_16K_PAGES=y' /tmp/kernel-embedded-config.txt; then
+            echo "FATAL: CONFIG_ARM64_16K_PAGES=y NOT confirmed in built kernel!" >&2
+            exit 1
+          fi
+          echo "PASS: Built kernel confirms CONFIG_ARM64_16K_PAGES=y"
 
       - name: Publish kernel as kernel-rpi
         run: |
