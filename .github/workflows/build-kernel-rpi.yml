@@ -289,9 +289,9 @@ jobs:
       # magic). We must build the full imager from siderolabs/talos source so that
       # both the kernel and the initramfs come from our RPi vendor kernel OCI.
       #
-      # We also apply patches/talos/0001-modules-arm64-rpi.patch which replaces
-      # the x86/server-oriented modules-arm64.txt with RPi-relevant modules
-      # (BCM2835, USB networking, media, sound) before the initramfs is built.
+      # We also replace hack/modules-arm64.txt with our own copy (assets/modules-arm64.txt)
+      # which contains RPi-relevant modules (BCM2835, USB networking, media, sound)
+      # instead of the x86/server-oriented default, before the initramfs is built.
 
       - name: Clone siderolabs/talos
         run: |
@@ -299,13 +299,10 @@ jobs:
             --branch "${{ steps.ver.outputs.talos_version }}" \
             https://github.com/siderolabs/talos.git checkouts/talos
 
-      - name: Apply RPi modules-arm64.txt patch to talos
+      - name: Replace modules-arm64.txt with RPi module list
         run: |
-          set -euo pipefail
-          cp patches/talos/0001-modules-arm64-rpi.patch checkouts/talos/
-          git -C checkouts/talos am 0001-modules-arm64-rpi.patch
-          rm -f checkouts/talos/0001-modules-arm64-rpi.patch
-          echo "modules-arm64.txt head after patch:"
+          cp assets/modules-arm64.txt checkouts/talos/hack/modules-arm64.txt
+          echo "modules-arm64.txt head after replacement:"
           head -5 checkouts/talos/hack/modules-arm64.txt
 
       - name: Build and push imager (RPi 16K kernel + matching initramfs)
