@@ -161,17 +161,17 @@ jobs:
           echo "=== Page shift ==="
           grep -E 'PAGE_SHIFT|PAGE_SIZE' "$CONFIG" | head -5
           echo ""
-          # Hard fail if 4K is set
-          if grep -q '^CONFIG_ARM64_4K_PAGES=y' "$CONFIG"; then
-            echo "FATAL: CONFIG_ARM64_4K_PAGES=y found in config-arm64 — patch is wrong!" >&2
+          # Hard fail if 16K is set
+          if grep -q '^CONFIG_ARM64_16K_PAGES=y' "$CONFIG"; then
+            echo "FATAL: CONFIG_ARM64_16K_PAGES=y found in config-arm64 — patch is wrong!" >&2
             exit 1
           fi
-          # Hard fail if 16K is NOT set
-          if ! grep -q '^CONFIG_ARM64_16K_PAGES=y' "$CONFIG"; then
-            echo "FATAL: CONFIG_ARM64_16K_PAGES=y NOT found in config-arm64 — patch is wrong!" >&2
+          # Hard fail if 4K is NOT set
+          if ! grep -q '^CONFIG_ARM64_4K_PAGES=y' "$CONFIG"; then
+            echo "FATAL: CONFIG_ARM64_4K_PAGES=y NOT found in config-arm64 — patch is wrong!" >&2
             exit 1
           fi
-          echo "PASS: config-arm64 has CONFIG_ARM64_16K_PAGES=y and no 4K pages"
+          echo "PASS: config-arm64 has CONFIG_ARM64_4K_PAGES=y and no 16K pages"
 
       - name: Copy vendored macb kernel patches into pkgs tree
         run: |
