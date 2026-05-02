@@ -229,28 +229,16 @@ jobs:
           ls -lh "$VMLINUZ"
           echo ""
 
-          # Extract embedded config via IKCFG_ST magic (requires CONFIG_IKCONFIG=y).
-          # || true prevents set -e from killing the script when grep finds no match.
-          OFFSET=$(grep -aob 'IKCFG_ST' "$VMLINUZ" 2>/dev/null | head -1 | cut -d: -f1 || true)
-
-          if [ -z "$OFFSET" ]; then
-            echo "IKCFG_ST not found directly (vmlinuz is compressed). Trying extract-ikconfig..."
-            # Use the official kernel script — handles gzip/bzip2/xz/lz4/zstd compressed vmlinuz
-            curl -fsSL \
-              "https://raw.githubusercontent.com/raspberrypi/linux/${{ steps.ver.outputs.linux_ref }}/scripts/extract-ikconfig" \
-              -o /tmp/extract-ikconfig
-            chmod +x /tmp/extract-ikconfig
-            if /tmp/extract-ikconfig "$VMLINUZ" > /tmp/kernel-embedded-config.txt; then
-              echo "Extracted $(wc -l < /tmp/kernel-embedded-config.txt) config lines via extract-ikconfig"
-            else
-              echo "ERROR: extract-ikconfig failed — CONFIG_IKCONFIG may not be compiled in"
-              exit 1
-            fi
+          # Always use extract-ikconfig — handles gzip/bzip2/xz/lz4/zstd compressed vmlinuz
+          curl -fsSL \
+            "https://raw.githubusercontent.com/raspberrypi/linux/${{ steps.ver.outputs.linux_ref }}/scripts/extract-ikconfig" \
+            -o /tmp/extract-ikconfig
+          chmod +x /tmp/extract-ikconfig
+          if /tmp/extract-ikconfig "$VMLINUZ" > /tmp/kernel-embedded-config.txt; then
+            echo "Extracted $(wc -l < /tmp/kernel-embedded-config.txt) config lines via extract-ikconfig"
           else
-            START=$((OFFSET + 8))
-            echo "Extracting embedded config at byte offset $START..."
-            dd if="$VMLINUZ" bs=1 skip=$START 2>/dev/null | zcat > /tmp/kernel-embedded-config.txt
-            echo "Extracted $(wc -l < /tmp/kernel-embedded-config.txt) config lines"
+            echo "ERROR: extract-ikconfig failed — CONFIG_IKCONFIG may not be compiled in"
+            exit 1
           fi
           echo ""
 
@@ -261,16 +249,16 @@ jobs:
           grep -E 'CC_VERSION_TEXT|GCC_VERSION|AS_VERSION|LD_VERSION' /tmp/kernel-embedded-config.txt
           echo ""
 
-          # Hard fail if 4K survived into the built kernel
-          if grep -q '^CONFIG_ARM64_4K_PAGES=y' /tmp/kernel-embedded-config.txt; then
-            echo "FATAL: Built kernel has CONFIG_ARM64_4K_PAGES=y — 16K pages did NOT survive the build!" >&2
+          # Hard fail if 16K survived into the built kernel
+          if grep -q '^CONFIG_ARM64_16K_PAGES=y' /tmp/kernel-embedded-config.txt; then
+            echo "FATAL: Built kernel has CONFIG_ARM64_16K_PAGES=y — 4K pages did NOT survive the build!" >&2
             exit 1
           fi
-          if ! grep -q '^CONFIG_ARM64_16K_PAGES=y' /tmp/kernel-embedded-config.txt; then
-            echo "FATAL: CONFIG_ARM64_16K_PAGES=y NOT confirmed in built kernel!" >&2
+          if ! grep -q '^CONFIG_ARM64_4K_PAGES=y' /tmp/kernel-embedded-config.txt; then
+            echo "FATAL: CONFIG_ARM64_4K_PAGES=y NOT confirmed in built kernel!" >&2
             exit 1
           fi
-          echo "PASS: Built kernel confirms CONFIG_ARM64_16K_PAGES=y"
+          echo "PASS: Built kernel confirms CONFIG_ARM64_4K_PAGES=y"
 
       - name: Publish kernel as kernel-rpi
         run: |
