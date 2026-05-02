@@ -187,8 +187,7 @@ jobs:
 
       # ── siderolabs/talos: imager + installer-base with RPi kernel ────────────
       # Build full imager from source: kernel + initramfs must both come from our
-      # RPi kernel OCI (16K pages). Stock initramfs has 4K modules — they won't
-      # load on a 16K kernel. modules-arm64.txt patch swaps in RPi-relevant modules.
+      # RPi kernel OCI (4K pages). modules-arm64.txt patch swaps in RPi-relevant modules.
 
       - name: Clone siderolabs/talos
         run: |
@@ -205,7 +204,7 @@ jobs:
           echo "modules-arm64.txt head after patch:"
           head -5 checkouts/talos/hack/modules-arm64.txt
 
-      - name: Build and push imager (RPi 16K kernel + matching initramfs)
+      - name: Build and push imager (RPi 4K kernel + matching initramfs)
         run: |
           cd checkouts/talos
           make \
