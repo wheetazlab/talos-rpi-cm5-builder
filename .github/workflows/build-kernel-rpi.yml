@@ -162,7 +162,7 @@ jobs:
             patches/pkgs/kernel-rpi/0003-net-macb-add-TX-stall-watchdog-to-recover-from-lost-.patch \
             patches/pkgs/kernel-rpi/0004-revert-pcie-brcmstb-bcm2712-commits.patch \
             checkouts/pkgs/kernel/build/patches/
-          ls -1 checkouts/pkgs/kernel/build/patches/000*-net-macb-*.patch
+          ls -1 checkouts/pkgs/kernel/build/patches/000*.patch
 
       - name: Build kernel (siderolabs/pkgs, Pi vendor source)
         run: |
