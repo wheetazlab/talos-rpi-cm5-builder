@@ -185,10 +185,6 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel:${{ steps.pkgs.outputs.tag }} \
             ${{ env.REGISTRY }}/${{ env.REGISTRY_USERNAME }}/kernel-rpi:${{ steps.pkgs.outputs.tag }}
 
-      # ── siderolabs/talos: imager + installer-base with RPi kernel ────────────
-      # Build full imager from source: kernel + initramfs must both come from our
-      # RPi kernel OCI (4K pages). modules-arm64.txt patch swaps in RPi-relevant modules.
-
       - name: Clone siderolabs/talos
         run: |
           git clone -c advice.detachedHead=false \
