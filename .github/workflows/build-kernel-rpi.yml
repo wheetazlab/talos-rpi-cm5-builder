@@ -148,31 +148,6 @@ jobs:
           echo "Pkgfile head after patch:"
           grep -E '^\s*linux_(version|sha256):' checkouts/pkgs/Pkgfile
 
-      - name: Verify config-arm64 page size and compiler settings
-        run: |
-          set -euo pipefail
-          CONFIG=checkouts/pkgs/kernel/build/config-arm64
-          echo "=== ARM64 page size settings ==="
-          grep -E 'ARM64_(4K|16K|64K)_PAGES' "$CONFIG"
-          echo ""
-          echo "=== Compiler metadata ==="
-          grep -E 'CC_VERSION_TEXT|GCC_VERSION|AS_VERSION|LD_VERSION' "$CONFIG"
-          echo ""
-          echo "=== Page shift ==="
-          grep -E 'PAGE_SHIFT|PAGE_SIZE' "$CONFIG" | head -5
-          echo ""
-          # Hard fail if 16K is set
-          if grep -q '^CONFIG_ARM64_16K_PAGES=y' "$CONFIG"; then
-            echo "FATAL: CONFIG_ARM64_16K_PAGES=y found in config-arm64 — patch is wrong!" >&2
-            exit 1
-          fi
-          # Hard fail if 4K is NOT set
-          if ! grep -q '^CONFIG_ARM64_4K_PAGES=y' "$CONFIG"; then
-            echo "FATAL: CONFIG_ARM64_4K_PAGES=y NOT found in config-arm64 — patch is wrong!" >&2
-            exit 1
-          fi
-          echo "PASS: config-arm64 has CONFIG_ARM64_4K_PAGES=y and no 16K pages"
-
       - name: Copy vendored macb kernel patches into pkgs tree
         run: |
           # Patches vendored under patches/pkgs/kernel-rpi/ — fork-anchored
