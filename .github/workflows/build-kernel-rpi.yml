@@ -185,7 +185,6 @@ jobs:
             patches/pkgs/kernel-rpi/0001-net-macb-flush-PCIe-posted-write-after-TSTART-doorbe.patch \
             patches/pkgs/kernel-rpi/0002-net-macb-re-check-ISR-after-IER-re-enable-in-macb_tx.patch \
             patches/pkgs/kernel-rpi/0003-net-macb-add-TX-stall-watchdog-to-recover-from-lost-.patch \
-            patches/pkgs/kernel-rpi/0004-Revert-PCI-pcie-brcmstb-fake-MSIx-support-on-intern.patch \
             checkouts/pkgs/kernel/build/patches/
           ls -1 checkouts/pkgs/kernel/build/patches/000*-net-macb-*.patch
 
