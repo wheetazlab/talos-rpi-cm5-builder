@@ -21,10 +21,10 @@ index 8799e13..fc350c8 100644
 -  linux_version: 6.17.7
 -  linux_sha256: ddf2ea0d4439e1d57136be3623102af9458f601f5b1cb77e83246e88aea09d0e
 -  linux_sha512: f16f28c395374099ccf21d9df654a31746ed3f09376f7f9eca172579787b7b493d3878cb0a44348c2846bba93f7950f04b0e45235152860e4789fdd2aa9711cb
-+  # rpi-6.18.y branch, commit 47a33eea6d51 (2026-04-18), kernel 6.18.23
-+  linux_version: 47a33eea6d51
-+  linux_sha256: f2af4b1308faea40bec33f0cc780d8eca8a574efb719a61ef1edd73986d89423
-+  linux_sha512: ff8589d934429edcfb17271eab8580241c45b5abd4a55e2c2a25c8966356d749a41179c4f044cf63847bcfc060367ab5413f4aef1e4f1f1500dcc2c9b5c8efe4
++  # rpi-6.18.y branch, commit f2f68e79f16f (2026-04-22), kernel 6.18.24
++  linux_version: f2f68e79f16f
++  linux_sha256: 7744912c619220a3c8ecf8e681fe351985ba90e96bf48dcc14a38f89c6d9dd07
++  linux_sha512: 5f08a66c0df28a05ff03560665574a02f48464778d2a8da6fbd6b22c782d49616e7a0623b84e292055b864dd8af45614f6e9b3cd157700fee3ca4346f293a03d
  
    # renovate: datasource=git-tags extractVersion=^libaio-(?<version>.*)$ depName=https://pagure.io/libaio.git
    libaio_version: 0.3.113
