@@ -1,0 +1,115 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Lukasz Raczylo <lukasz@raczylo.com>
+Date: Sat, 2 May 2026 14:42:29 +0100
+Subject: [PATCH] net: macb: track TX-tail movement via boolean to avoid index
+ aliasing
+
+Address review feedback from pelwell on raspberrypi/linux#7340.
+
+Per-queue ring indices are bounded and reused, so the previous
+snapshot-of-tx_tail comparison in macb_tx_stall_watchdog() can
+false-positive when the index lands on the same value between
+two ticks under sustained load.
+
+Replace the snapshot with a tx_stall_tail_moved boolean that
+macb_tx_complete() sets under tx_ptr_lock whenever tx_tail
+advances and the watchdog clears under the same lock at each
+tick.  No atomic is required (single producer / single consumer
+already serialised by tx_ptr_lock).
+
+Initialise the flag to true in macb_open() so the first tick
+after open is a grace period rather than a synthetic stall.
+
+Anchored against the rpi-6.18.y vendor fork (which carries the
+extra `bool tx_pending` field on struct macb_queue) — the
+mainline-anchored variant lives at
+home-cluster/talos-kernel-patches/0004-*.patch.
+
+Link: https://github.com/raspberrypi/linux/pull/7340#pullrequestreview-4198291045
+Signed-off-by: Lukasz Raczylo <lukasz@raczylo.com>
+---
+ drivers/net/ethernet/cadence/macb.h      | 10 ++++++++--
+ drivers/net/ethernet/cadence/macb_main.c | 23 +++++++++++++++--------
+ 2 files changed, 23 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/net/ethernet/cadence/macb.h b/drivers/net/ethernet/cadence/macb.h
+index 827075e4b..bdbafe097 100644
+--- a/drivers/net/ethernet/cadence/macb.h
++++ b/drivers/net/ethernet/cadence/macb.h
+@@ -1295,9 +1295,15 @@ struct macb_queue {
+ 	bool			txubr_pending;
+ 	bool			tx_pending;
+ 
+-	/* TX stall watchdog -- see macb_tx_stall_watchdog() in macb_main.c */
++	/* TX stall watchdog -- see macb_tx_stall_watchdog() in macb_main.c.
++	 * tx_stall_tail_moved is set by macb_tx_complete() under tx_ptr_lock
++	 * whenever tx_tail advances, and cleared by the watchdog tick on the
++	 * same lock.  A bool avoids the index-aliasing false-positive that a
++	 * snapshot-of-tx_tail comparison would have when the ring index space
++	 * happens to wrap to the same value between two ticks.
++	 */
+ 	struct delayed_work	tx_stall_watchdog_work;
+-	unsigned int		tx_stall_last_tail;
++	bool			tx_stall_tail_moved;
+ 
+ 	struct napi_struct	napi_tx;
+ 
+diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
+index 77fbcbab8..423aac02a 100644
+--- a/drivers/net/ethernet/cadence/macb_main.c
++++ b/drivers/net/ethernet/cadence/macb_main.c
+@@ -1505,6 +1505,8 @@ static int macb_tx_complete(struct macb_queue *queue, int budget)
+ 				  packets, bytes);
+ 
+ 	queue->tx_tail = tail;
++	if (packets)
++		queue->tx_stall_tail_moved = true;
+ 	if (__netif_subqueue_stopped(bp->dev, queue_index) &&
+ 	    CIRC_CNT(queue->tx_head, queue->tx_tail,
+ 		     bp->tx_ring_size) <= MACB_TX_WAKEUP_THRESH(bp))
+@@ -2036,9 +2038,16 @@ static int macb_tx_poll(struct napi_struct *napi, int budget)
+  * recovery chain (tx_pending -> txubr_pending -> macb_tx_restart())
+  * that fires on TCOMP; if TCOMP itself is lost the TX ring stalls
+  * silently until something else kicks TSTART.  This watchdog runs
+- * once per second per queue, snapshots tx_tail, and calls
+- * macb_tx_restart() if the ring is non-empty and tx_tail has not
+- * advanced since the previous tick.
++ * once per second per queue and calls macb_tx_restart() if the ring
++ * is non-empty and tx_tail has not advanced since the previous tick.
++ *
++ * Movement is tracked via the tx_stall_tail_moved boolean rather
++ * than by snapshotting tx_tail.  Per-queue ring indices are bounded
++ * (and reused), so a snapshot comparison can false-positive when the
++ * index happens to land on the same value between two ticks under
++ * sustained load.  The boolean is set by macb_tx_complete() whenever
++ * tx_tail advances and cleared by this watchdog after each tick;
++ * both writes are under tx_ptr_lock, so no atomic is required.
+  *
+  * macb_tx_restart() already checks the hardware's TBQP against the
+  * driver's head index before re-asserting TSTART, so on a healthy
+@@ -2061,11 +2070,9 @@ static void macb_tx_stall_watchdog(struct work_struct *work)
+ 	spin_lock_irqsave(&queue->tx_ptr_lock, flags);
+ 	cur_tail = queue->tx_tail;
+ 	cur_head = queue->tx_head;
+-	if (cur_head != cur_tail &&
+-	    cur_tail == queue->tx_stall_last_tail)
++	if (cur_head != cur_tail && !queue->tx_stall_tail_moved)
+ 		stalled = true;
+-	else
+-		queue->tx_stall_last_tail = cur_tail;
++	queue->tx_stall_tail_moved = false;
+ 	spin_unlock_irqrestore(&queue->tx_ptr_lock, flags);
+ 
+ 	if (stalled) {
+@@ -3346,7 +3353,7 @@ static int macb_open(struct net_device *dev)
+ 	for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue) {
+ 		napi_enable(&queue->napi_rx);
+ 		napi_enable(&queue->napi_tx);
+-		queue->tx_stall_last_tail = queue->tx_tail;
++		queue->tx_stall_tail_moved = true;
+ 		schedule_delayed_work(&queue->tx_stall_watchdog_work,
+ 				      msecs_to_jiffies(MACB_TX_STALL_INTERVAL_MS));
+ 	}
+-- 
+2.54.0
+
