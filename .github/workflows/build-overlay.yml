@@ -1,11 +1,8 @@
 name: Build Custom SBC Overlay (mainline kernel)
 
 # Builds a custom ghcr.io/wheetazlab/sbc-raspberrypi overlay using DTBs from
-# raspberrypi/linux at the same 6.18.24 SHA used by the RPi vendor kernel build.
-# Mainline Talos v1.12.7 also ships Linux 6.18.24 — both overlays target the
-# same kernel version to guarantee DTB/driver compatibility.
-#
-# For the RPi vendor kernel variant (publish-rpi.yml) use build-overlay-rpi.yml.
+# raspberrypi/linux f2f68e79f16f (Linux 6.18.24), matching the kernel shipped
+# by Talos v1.12.7.
 #
 # Run this manually whenever you want to refresh the mainline overlay.
 # Update CUSTOM_OVERLAY_IMAGE in the Makefile to use the new tag.
