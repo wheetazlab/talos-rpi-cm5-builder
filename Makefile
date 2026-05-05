@@ -10,7 +10,8 @@ UTIL_LINUX_VERSION   ?= 2.41.4
 # CUSTOM_INSTALLER_BASE: defined in .github/workflows/publish.yml as workflow_dispatch input.
 #   Default there = ghcr.io/wheetazlab/rpi-talos:<TALOS_VERSION>-k-rpi-macb (Pi-vendor + 16K).
 #   Override per-run via Actions UI to use mainline (-k-macb) instead.
-CUSTOM_OVERLAY_IMAGE  ?= ghcr.io/wheetazlab/sbc-raspberrypi:pr88-cd2
+CUSTOM_OVERLAY_IMAGE     ?= ghcr.io/wheetazlab/sbc-raspberrypi:pr88-mainline-cd1
+CUSTOM_OVERLAY_RPI_IMAGE ?= ghcr.io/wheetazlab/sbc-raspberrypi:pr88-rpi-cd2
 
 # --- Build config --------------------------------------------------------------
 ARCH        ?= arm64

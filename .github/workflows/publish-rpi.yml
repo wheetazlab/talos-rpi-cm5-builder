@@ -101,7 +101,7 @@ jobs:
 
           ISCSI=$(grep '^ISCSI_TOOLS_VERSION' Makefile | awk '{print $NF}')
           UTIL=$(grep '^UTIL_LINUX_VERSION' Makefile | awk '{print $NF}')
-          OVERLAY_IMAGE=$(grep '^CUSTOM_OVERLAY_IMAGE' Makefile | awk '{print $NF}')
+          OVERLAY_IMAGE=$(grep '^CUSTOM_OVERLAY_RPI_IMAGE' Makefile | awk '{print $NF}')
 
           # Installer base: workflow_dispatch input wins, else env default.
           INSTALLER_BASE_INPUT="${{ github.event.inputs.installer_base }}"
