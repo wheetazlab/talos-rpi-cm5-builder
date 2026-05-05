@@ -114,6 +114,10 @@ jobs:
           set -euo pipefail
           cd sbc-raspberrypi
           mkdir -p artifacts/dtb/raspberrypi/patches
+          # Override 0008 from sbc-raspberrypi: context-corrected for f2f68e79f16f
+          # (CM5 phy @0/0x0, interrupt-parent &rp1_gpio, extra pinctrl lines).
+          cp -v "${GITHUB_WORKSPACE}/builder/patches/dtb/0008-0001-Amend-the-RP1-ethernet-node-to-work-with-upstream-dr.patch" \
+            artifacts/dtb/raspberrypi/patches/0008-0001-Amend-the-RP1-ethernet-node-to-work-with-upstream-dr.patch
           cp -v "${GITHUB_WORKSPACE}/builder/patches/dtb/0011-cm5-sdio1-drop-broken-cd.patch" \
             artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch
 
