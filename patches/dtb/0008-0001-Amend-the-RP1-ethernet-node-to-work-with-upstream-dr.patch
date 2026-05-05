@@ -4,9 +4,10 @@ Date: Tue, 16 Sep 2025 10:59:21 +0300
 Subject: [PATCH] Amend the RP1 ethernet node to work with upstream driver
 
 Context-corrected for raspberrypi/linux f2f68e79f16f (rpi-6.18.y):
-  - CM5: phy address changed from @1/0x1 to @0/0x0
   - CM5: interrupt-parent changed from <&gpio> to <&rp1_gpio>
   - CM5: extra pinctrl-names/pinctrl-0 lines added to context
+  - CM5: source changed phy addr to @0/0x0 — reverted to @1/0x1
+           (BCM54213PE on CM5 Rev 1.0 CMIO4 strapped to MDIO addr 1)
   - Pi5: hunk tightened to match exact line offsets
 
 ---
@@ -37,7 +38,7 @@ Context-corrected for raspberrypi/linux f2f68e79f16f (rpi-6.18.y):
  
 --- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
 +++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
-@@ -157,16 +157,22 @@
+@@ -157,16 +157,21 @@
  &rp1_eth {
  	status = "okay";
  	phy-handle = <&phy1>;
@@ -52,14 +53,13 @@ Context-corrected for raspberrypi/linux f2f68e79f16f (rpi-6.18.y):
 -		interrupt-parent = <&rp1_gpio>;
 -		interrupts = <37 IRQ_TYPE_LEVEL_LOW>;
 +	mdio {
-+		reg = <0x1>;
 +		reset-gpios = <&rp1_gpio 32 GPIO_ACTIVE_LOW>;
 +		reset-delay-us = <5000>;
 +		#address-cells = <1>;
 +		#size-cells = <0>;
 +
-+		phy1: ethernet-phy@0 {
-+			reg = <0x0>;
++		phy1: ethernet-phy@1 {
++			reg = <0x1>;
 +			brcm,powerdown-enable;
 +			interrupt-parent = <&rp1_gpio>;
 +			interrupts = <37 IRQ_TYPE_LEVEL_LOW>;
