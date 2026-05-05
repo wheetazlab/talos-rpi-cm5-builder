@@ -116,23 +116,52 @@ jobs:
           cp -v "${GITHUB_WORKSPACE}/builder/patches/dtb/0011-cm5-sdio1-drop-broken-cd.patch" \
             artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch
 
-          # The sbc-raspberrypi 0001-000x patches target the mainline kernel DTS.
-          # Using the RPi vendor kernel (raspberrypi/linux), those changes are
-          # already present — the patch loop in pkg.yaml would get "Reversed
-          # patch" failures (0007, 0008, …).  Remove them so the BuildKit build
-          # only applies our custom 0011.  (Same approach: lukaszraczylo/talos-builder.)
-          find artifacts/dtb/raspberrypi/patches -name "*.patch" ! -name "0011-*" -delete
-          echo "Remaining patches:"
-          ls artifacts/dtb/raspberrypi/patches/
+          # Rewrite the patch loop in pkg.yaml to be forward-aware:
+          #   - forward-applicable  → apply  (mainline kernel: patches not yet present)
+          #   - already applied     → skip   (RPi vendor kernel: patches upstreamed)
+          #   - genuinely broken    → fail   (real context drift, catch early)
+          # This makes the build work for both mainline and RPi vendor kernels.
+          python3 - <<'PYEOF'
+import sys
+f = 'artifacts/dtb/raspberrypi/pkg.yaml'
+content = open(f).read()
+old = '          patch -p1 < $patch || (echo "Failed to apply patch $patch" && exit 1)'
+new = """          if patch -p1 --dry-run < $patch > /dev/null 2>&1; then
+            patch -p1 < $patch
+          elif patch -p1 --dry-run -R < $patch > /dev/null 2>&1; then
+            echo "(already applied, skipping)"
+          else
+            echo "Failed to apply patch $patch"
+            exit 1
+          fi"""
+if old not in content:
+    print('ERROR: patch loop not found in pkg.yaml', file=sys.stderr)
+    sys.exit(1)
+open(f, 'w').write(content.replace(old, new, 1))
+print('pkg.yaml: patch loop updated to forward-aware apply')
+PYEOF
+
+          # Sanity-check all patches against the actual kernel source.
+          # Uses the same forward-aware logic as the pkg.yaml loop above.
           tmp=$(mktemp -d)
           trap 'rm -rf "${tmp}"' EXIT
           ref="${{ github.event.inputs.rpi_dtb_ref }}"
           curl -fsSL "https://github.com/raspberrypi/linux/archive/${ref}.tar.gz" \
             | tar -xz -C "${tmp}" --strip-components=1
           cd "${tmp}"
-          echo "--> dry-run apply 0011-cm5-sdio1-drop-broken-cd.patch"
-          patch -p1 --dry-run < "${GITHUB_WORKSPACE}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch"
-          echo "0011 applies cleanly"
+          for p in "${GITHUB_WORKSPACE}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/"*.patch; do
+            name=$(basename "$p")
+            if patch -p1 --dry-run < "$p" > /dev/null 2>&1; then
+              echo "--> apply ${name}"
+              patch -p1 < "$p"
+            elif patch -p1 --dry-run -R < "$p" > /dev/null 2>&1; then
+              echo "--> ${name}: already in source, skipping"
+            else
+              echo "ERROR: ${name} failed — not forward-applicable and not already applied"
+              patch -p1 < "$p"
+              exit 1
+            fi
+          done
 
       - name: Build and push custom overlay
         run: |
