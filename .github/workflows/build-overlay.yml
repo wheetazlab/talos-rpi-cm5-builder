@@ -116,23 +116,23 @@ jobs:
           cp -v "${GITHUB_WORKSPACE}/builder/patches/dtb/0011-cm5-sdio1-drop-broken-cd.patch" \
             artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch
 
-          # Sanity: simulate the alphabetical apply order against a fresh
-          # raspberrypi/linux tree so a context-drift bug fails fast here
-          # instead of midway through the BuildKit DTB build.
+          # The sbc-raspberrypi 0001-000x patches target the mainline kernel DTS.
+          # Using the RPi vendor kernel (raspberrypi/linux), those changes are
+          # already present — the patch loop in pkg.yaml would get "Reversed
+          # patch" failures (0007, 0008, …).  Remove them so the BuildKit build
+          # only applies our custom 0011.  (Same approach: lukaszraczylo/talos-builder.)
+          find artifacts/dtb/raspberrypi/patches -name "*.patch" ! -name "0011-*" -delete
+          echo "Remaining patches:"
+          ls artifacts/dtb/raspberrypi/patches/
           tmp=$(mktemp -d)
           trap 'rm -rf "${tmp}"' EXIT
           ref="${{ github.event.inputs.rpi_dtb_ref }}"
           curl -fsSL "https://github.com/raspberrypi/linux/archive/${ref}.tar.gz" \
             | tar -xz -C "${tmp}" --strip-components=1
           cd "${tmp}"
-          # 0007 already upstreamed in f2f68e79f16f source tree — skip to avoid
-          # "Reversed (or previously applied) patch detected" failure
-          rm -f "${GITHUB_WORKSPACE}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/0007-bcm2712-fix-compatible.patch"
-          for p in "${GITHUB_WORKSPACE}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/"*.patch; do
-            echo "--> dry-run apply $(basename "$p")"
-            patch -p1 --dry-run < "$p"
-            patch -p1 < "$p"
-          done
+          echo "--> dry-run apply 0011-cm5-sdio1-drop-broken-cd.patch"
+          patch -p1 --dry-run < "${GITHUB_WORKSPACE}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch"
+          echo "0011 applies cleanly"
 
       - name: Build and push custom overlay
         run: |
