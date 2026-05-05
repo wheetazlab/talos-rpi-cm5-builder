@@ -125,6 +125,9 @@ jobs:
           curl -fsSL "https://github.com/raspberrypi/linux/archive/${ref}.tar.gz" \
             | tar -xz -C "${tmp}" --strip-components=1
           cd "${tmp}"
+          # 0007 already upstreamed in f2f68e79f16f source tree — skip to avoid
+          # "Reversed (or previously applied) patch detected" failure
+          rm -f "${GITHUB_WORKSPACE}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/0007-bcm2712-fix-compatible.patch"
           for p in "${GITHUB_WORKSPACE}/sbc-raspberrypi/artifacts/dtb/raspberrypi/patches/"*.patch; do
             echo "--> dry-run apply $(basename "$p")"
             patch -p1 --dry-run < "$p"
