@@ -1,8 +1,9 @@
 name: Build Custom SBC Overlay (mainline kernel)
 
 # Builds a custom ghcr.io/wheetazlab/sbc-raspberrypi overlay using DTBs from
-# a raspberrypi/linux stable_* tag to match the mainline Talos kernel used by
-# publish.yml.
+# raspberrypi/linux at the same 6.18.24 SHA used by the RPi vendor kernel build.
+# Mainline Talos v1.12.7 also ships Linux 6.18.24 — both overlays target the
+# same kernel version to guarantee DTB/driver compatibility.
 #
 # For the RPi vendor kernel variant (publish-rpi.yml) use build-overlay-rpi.yml.
 #
@@ -19,7 +20,7 @@ on:
       overlay_tag:
         description: 'Tag for the overlay image (e.g. pr88-mainline-cd1, pr88-mainline-cd2)'
         required: false
-        default: 'pr88-mainline-cd1'
+        default: 'pr88-mainline-cd2'
       uboot_version:
         description: 'u-boot/u-boot source version (for u-boot-<ver>.tar.bz2)'
         required: false
@@ -33,17 +34,17 @@ on:
         required: false
         default: 'b1f988a497c77da60faf89ed33034e9ae58c4cd7f208e5ce451f1372e13540a66289bee4f08ca2f68f105d73f1ceae058b1f713db549edbcc885d9c66bdc4f8b'
       rpi_dtb_ref:
-        description: 'raspberrypi/linux stable_* tag for mainline DTB packaging'
+        description: 'raspberrypi/linux SHA for DTB packaging (must match kernel version)'
         required: false
-        default: 'stable_20250428'
+        default: 'f2f68e79f16f'
       rpi_dtb_sha256:
         description: 'sha256 for raspberrypi/linux tarball at rpi_dtb_ref'
         required: false
-        default: 'c95906cfbc7808de5860c6d86537bea22e3501f600a5209de59a86cb436886f6'
+        default: '7744912c619220a3c8ecf8e681fe351985ba90e96bf48dcc14a38f89c6d9dd07'
       rpi_dtb_sha512:
         description: 'sha512 for raspberrypi/linux tarball at rpi_dtb_ref'
         required: false
-        default: '0ed5d490c491e590b5980dccf6fcac0dd3c47accbfacd40d91507c12801cff34fa6a1c68991c8a6c57bb259c909121414766f35a0b11c4bd5d62c3e11d710839'
+        default: '5f08a66c0df28a05ff03560665574a02f48464778d2a8da6fbd6b22c782d49616e7a0623b84e292055b864dd8af45614f6e9b3cd157700fee3ca4346f293a03d'
       runner:
         description: 'GitHub Actions runner (e.g. ubuntu-24.04-arm, mac-runner)'
         required: false
@@ -113,6 +114,10 @@ jobs:
           set -euo pipefail
           cd sbc-raspberrypi
           mkdir -p artifacts/dtb/raspberrypi/patches
+          # Override 0008 from sbc-raspberrypi: context-corrected for f2f68e79f16f
+          # (CM5 phy @0/0x0, interrupt-parent &rp1_gpio, extra pinctrl lines).
+          cp -v "${GITHUB_WORKSPACE}/builder/patches/dtb/0008-0001-Amend-the-RP1-ethernet-node-to-work-with-upstream-dr.patch" \
+            artifacts/dtb/raspberrypi/patches/0008-0001-Amend-the-RP1-ethernet-node-to-work-with-upstream-dr.patch
           cp -v "${GITHUB_WORKSPACE}/builder/patches/dtb/0011-cm5-sdio1-drop-broken-cd.patch" \
             artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch
 
@@ -185,7 +190,7 @@ jobs:
           echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Source | sidero-community/sbc-raspberrypi @ \`${{ github.event.inputs.pr88_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| U-Boot | \`${{ github.event.inputs.uboot_version }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| DTB ref | \`${{ github.event.inputs.rpi_dtb_ref }}\` (mainline stable tag) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| DTB ref | \`${{ github.event.inputs.rpi_dtb_ref }}\` (Linux 6.18.24) |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Image | \`ghcr.io/${{ github.repository_owner }}/sbc-raspberrypi:${{ github.event.inputs.overlay_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Update \`CUSTOM_OVERLAY_IMAGE\` in the Makefile to use this new tag." >> "$GITHUB_STEP_SUMMARY"
