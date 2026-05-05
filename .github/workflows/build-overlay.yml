@@ -117,12 +117,23 @@ jobs:
             artifacts/dtb/raspberrypi/patches/0011-cm5-sdio1-drop-broken-cd.patch
 
           # Rewrite the patch loop in pkg.yaml to be forward-aware:
-          #   - forward-applicable  -> apply  (mainline kernel: patches not yet present)
-          #   - already applied     -> skip   (RPi vendor kernel: patches upstreamed)
-          #   - genuinely broken    -> fail   (real context drift, catch early)
-          # This makes the build work for both mainline and RPi vendor kernels.
-          python3 "${GITHUB_WORKSPACE}/builder/scripts/patch-pkg-yaml.py" \
-            artifacts/dtb/raspberrypi/pkg.yaml
+          #   - forward-applicable -> apply  (mainline: patch not yet present)
+          #   - already applied    -> skip   (RPi vendor kernel: upstreamed)
+          #   - genuinely broken   -> fail   (real context drift)
+          awk '
+            /patch -p1 < \$patch \|\| \(echo "Failed/ {
+              print "          if patch -p1 --dry-run < $patch > /dev/null 2>&1; then"
+              print "            patch -p1 < $patch"
+              print "          elif patch -p1 --dry-run -R < $patch > /dev/null 2>&1; then"
+              print "            echo \"(already applied, skipping)\""
+              print "          else"
+              print "            echo \"Failed to apply patch $patch\" && exit 1"
+              print "          fi"
+              next
+            }
+            { print }
+          ' artifacts/dtb/raspberrypi/pkg.yaml > /tmp/pkg.yaml.new \
+            && mv /tmp/pkg.yaml.new artifacts/dtb/raspberrypi/pkg.yaml
 
           # Sanity-check all patches against the actual kernel source.
           # Uses the same forward-aware logic as the pkg.yaml loop above.
